@@ -13,31 +13,33 @@
 
 # PHP / Laravel dependencies and local artifacts
 /vendor/
+/.phpunit.cache
 /.phpunit.result.cache
 /auth.json
 /storage/*.key
+/storage/pail
+/bootstrap/cache/*.php
+!/bootstrap/cache/.gitignore
 
 # Laravel runtime/generated files
+# Storage subdirectories carry their own .gitignore files (Laravel default);
+# do not add blanket /storage/* rules here, as a parent-directory ignore
+# rule would also hide storage/app/private and storage/app/public.
+/bootstrap/ssr
 /public/build/
+/public/fonts-manifest.dev.json
 /public/hot
 /public/storage/
-/storage/app/*
-!/storage/app/.gitignore
-/storage/framework/cache/*
-!/storage/framework/cache/.gitignore
-/storage/framework/sessions/*
-!/storage/framework/sessions/.gitignore
-/storage/framework/testing/*
-!/storage/framework/testing/.gitignore
-/storage/framework/views/*
-!/storage/framework/views/.gitignore
-/storage/logs/*
-!/storage/logs/.gitignore
+
+# Wayfinder-generated frontend route/action helpers (regenerated on
+# dev/build; not source).
+/resources/js/actions/
+/resources/js/routes/
+/resources/js/wayfinder/
 
 # JavaScript / frontend dependencies and builds
 /node_modules/
 /dist/
-/build/
 /coverage/
 
 # Package-manager logs
