@@ -2,8 +2,8 @@
 
 namespace App\Analytics;
 
+use Carbon\CarbonImmutable;
 use DateTimeInterface;
-use Illuminate\Support\CarbonImmutable;
 use InvalidArgumentException;
 
 final readonly class ProjectMetrics

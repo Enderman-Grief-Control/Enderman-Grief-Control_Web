@@ -5,7 +5,7 @@ namespace Tests\Unit\Analytics;
 use App\Analytics\Contracts\DistributionProvider;
 use App\Analytics\ProjectMetrics;
 use App\Models\Distribution;
-use Illuminate\Support\CarbonImmutable;
+use Carbon\CarbonImmutable;
 use InvalidArgumentException;
 use Tests\TestCase;
 
