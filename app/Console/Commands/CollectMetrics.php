@@ -9,6 +9,7 @@ use App\Models\Distribution;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Throwable;
+use UnexpectedValueException;
 
 class CollectMetrics extends Command
 {
@@ -57,6 +58,10 @@ class CollectMetrics extends Command
     {
         return match ($distribution->provider) {
             'modrinth' => app(ModrinthProvider::class),
+            default =>
+                throw new UnexpectedValueException(
+                    "Unsupported distribution provider [{$distribution->provider}]."
+                ),
         };
     }
 }
