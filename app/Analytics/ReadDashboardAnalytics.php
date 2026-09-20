@@ -4,7 +4,7 @@ namespace App\Analytics;
 
 use App\Models\Distribution;
 use App\Models\MetricSnapshot;
-use Illuminate\Support\Carbon;
+use Carbon\CarbonInterface;
 
 class ReadDashboardAnalytics
 {
@@ -81,7 +81,7 @@ class ReadDashboardAnalytics
         };
     }
 
-    private function newerTimestamp(?Carbon $current, Carbon $candidate): Carbon
+    private function newerTimestamp(?CarbonInterface $current, CarbonInterface $candidate): CarbonInterface
     {
         if ($current === null || $candidate->greaterThan($current)) {
             return $candidate;
