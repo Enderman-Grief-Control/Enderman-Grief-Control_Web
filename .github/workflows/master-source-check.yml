@@ -1,0 +1,23 @@
+name: Master Source Check
+
+on:
+  pull_request_target:
+    branches:
+      - master
+
+jobs:
+  require-dev:
+    name: PR into master must come from dev
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verify source branch
+        env:
+          HEAD_BRANCH: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+        run: |
+          if [[ "$HEAD_BRANCH" != "dev" || "$HEAD_REPO" != "$BASE_REPO" ]]; then
+            echo "Pull requests into master must come from this repository's dev branch."
+            exit 1
+          fi
