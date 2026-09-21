@@ -47,6 +47,50 @@ The app serves at `http://localhost:8000` by default.
 - Tests run against an in-memory SQLite database (see `phpunit.xml`) and do
   not require PostgreSQL to be running.
 
+## Metrics collection
+
+The authenticated dashboard reads stored metric snapshots. It does not call
+Modrinth or CurseForge during page render.
+
+Run a local one-off collection after migrations and seed data are in place:
+
+```bash
+php artisan metrics:collect
+```
+
+Required server-side configuration:
+
+- `CURSEFORGE_API_KEY` must be set for active CurseForge distributions.
+- Modrinth collection currently uses public project metadata and does not need
+  an API key.
+
+The Laravel scheduler registers `metrics:collect` every 6 hours in
+`America/Los_Angeles`. In production, configure the standard Laravel scheduler
+cron entrypoint on the host:
+
+```cron
+* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
+```
+
+Scheduled runs use the same behavior as manual runs. Missing CurseForge
+credentials or provider errors cause the command to fail; details are emitted
+to the command output and Laravel logs. Successful reruns append new snapshots
+instead of deduplicating captures.
+
+To verify local collection, inspect the latest snapshots with Tinker:
+
+```bash
+php artisan tinker
+```
+
+```php
+App\Models\MetricSnapshot::query()
+    ->with('distribution:id,provider,name')
+    ->latest('captured_at')
+    ->take(5)
+    ->get(['id', 'distribution_id', 'downloads', 'captured_at']);
+```
+
 ## Auth notes
 
 This app uses Laravel Fortify for session-based auth. Public registration is
