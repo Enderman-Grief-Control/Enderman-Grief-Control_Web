@@ -47,6 +47,13 @@ The app serves at `http://localhost:8000` by default.
 - Tests run against an in-memory SQLite database (see `phpunit.xml`) and do
   not require PostgreSQL to be running.
 
+## Deployment
+
+Render deployment notes live in
+[`docs/deployment/render.md`](docs/deployment/render.md). The current
+production-shaped direction is a Docker-backed Render Web Service connected to
+managed PostgreSQL.
+
 ## Metrics collection
 
 The authenticated dashboard reads stored metric snapshots. It does not call
