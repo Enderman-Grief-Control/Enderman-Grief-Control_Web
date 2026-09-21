@@ -1,5 +1,10 @@
 import { Head } from '@inertiajs/react';
-import { AlertCircle, CheckCircle2, Download, ExternalLink } from 'lucide-react';
+import {
+    AlertCircle,
+    CheckCircle2,
+    Download,
+    ExternalLink,
+} from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
     Card,
@@ -51,14 +56,18 @@ function StatusBadge({ status }: { status: DashboardDistribution['status'] }) {
     }
 
     return (
-        <Badge variant="outline" className="gap-1.5 text-muted-foreground">
+        <Badge variant="outline" className="text-muted-foreground gap-1.5">
             <AlertCircle className="size-3.5" />
             Missing
         </Badge>
     );
 }
 
-function DistributionRow({distribution}: {distribution: DashboardDistribution;}) {
+interface DistributionRowProps {
+    distribution: DashboardDistribution;
+}
+
+function DistributionRow({ distribution }: DistributionRowProps) {
     return (
         <div className="grid gap-4 border-t px-4 py-4 first:border-t-0 sm:grid-cols-[minmax(0,1.35fr)_minmax(7rem,0.8fr)_minmax(9rem,1fr)_auto] sm:items-center sm:px-6">
             <div className="min-w-0">
@@ -68,14 +77,14 @@ function DistributionRow({distribution}: {distribution: DashboardDistribution;})
                     </h3>
                     <StatusBadge status={distribution.status} />
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">
+                <p className="text-muted-foreground mt-1 text-xs">
                     {formatLabel(distribution.provider)} /{' '}
                     {formatLabel(distribution.loader)}
                 </p>
             </div>
 
             <div>
-                <p className="text-xs font-medium text-muted-foreground">
+                <p className="text-muted-foreground text-xs font-medium">
                     Downloads
                 </p>
                 <p className="mt-1 text-sm font-semibold">
@@ -84,17 +93,19 @@ function DistributionRow({distribution}: {distribution: DashboardDistribution;})
             </div>
 
             <div>
-                <p className="text-xs font-medium text-muted-foreground">
+                <p className="text-muted-foreground text-xs font-medium">
                     Captured
                 </p>
-                <p className="mt-1 text-sm">{formatDate(distribution.capturedAt)}</p>
+                <p className="mt-1 text-sm">
+                    {formatDate(distribution.capturedAt)}
+                </p>
             </div>
 
             <a
                 href={distribution.listingUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex size-9 items-center justify-center rounded-md border text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                className="text-muted-foreground hover:bg-accent hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md border transition-colors"
                 aria-label={`Open ${distribution.name} listing`}
             >
                 <ExternalLink className="size-4" />
@@ -104,6 +115,10 @@ function DistributionRow({distribution}: {distribution: DashboardDistribution;})
 }
 
 export default function Dashboard({ analytics }: DashboardProps) {
+    const currentDistributionCount = analytics.distributions.filter(
+        (distribution) => distribution.status === 'current',
+    ).length;
+
     return (
         <>
             <Head title="Analytics Dashboard" />
@@ -113,12 +128,12 @@ export default function Dashboard({ analytics }: DashboardProps) {
                         <h1 className="text-2xl font-semibold tracking-normal">
                             Distribution analytics
                         </h1>
-                        <p className="mt-1 text-sm text-muted-foreground">
+                        <p className="text-muted-foreground mt-1 text-sm">
                             Latest snapshots for the active launch
                             distributions.
                         </p>
                     </div>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-muted-foreground text-sm">
                         Last updated: {formatDate(analytics.lastUpdatedAt)}
                     </p>
                 </div>
@@ -136,7 +151,7 @@ export default function Dashboard({ analytics }: DashboardProps) {
                 )}
 
                 {analytics.hasMissingSnapshots && analytics.hasSnapshots && (
-                    <div className="rounded-lg border bg-muted/35 px-4 py-3 text-sm text-muted-foreground">
+                    <div className="bg-muted/35 text-muted-foreground rounded-lg border px-4 py-3 text-sm">
                         Some active distributions are missing snapshots. Totals
                         include only distributions with stored data.
                     </div>
@@ -147,15 +162,19 @@ export default function Dashboard({ analytics }: DashboardProps) {
                         <CardHeader className="pb-0">
                             <CardDescription>Total downloads</CardDescription>
                             <CardTitle className="flex items-center gap-2 text-3xl">
-                                <Download className="size-6 text-muted-foreground" />
-                                {numberFormatter.format(analytics.totalDownloads)}
+                                <Download className="text-muted-foreground size-6" />
+                                {numberFormatter.format(
+                                    analytics.totalDownloads,
+                                )}
                             </CardTitle>
                         </CardHeader>
                     </Card>
 
                     <Card className="gap-3">
                         <CardHeader className="pb-0">
-                            <CardDescription>Active distributions</CardDescription>
+                            <CardDescription>
+                                Active distributions
+                            </CardDescription>
                             <CardTitle className="text-3xl">
                                 {analytics.distributions.length}
                             </CardTitle>
@@ -164,14 +183,11 @@ export default function Dashboard({ analytics }: DashboardProps) {
 
                     <Card className="gap-3">
                         <CardHeader className="pb-0">
-                            <CardDescription>Collection coverage</CardDescription>
+                            <CardDescription>
+                                Collection coverage
+                            </CardDescription>
                             <CardTitle className="text-3xl">
-                                {
-                                    analytics.distributions.filter(
-                                        (distribution) =>
-                                            distribution.status === 'current',
-                                    ).length
-                                }
+                                {currentDistributionCount}
                                 <span className="text-muted-foreground">
                                     /{analytics.distributions.length}
                                 </span>
