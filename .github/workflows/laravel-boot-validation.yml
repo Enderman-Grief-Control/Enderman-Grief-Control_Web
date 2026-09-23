@@ -10,33 +10,6 @@ jobs:
   boot:
     name: Boot Laravel for Artisan validation
     runs-on: ubuntu-latest
-    env:
-      APP_NAME: Enderman Grief Control
-      APP_ENV: production
-      APP_KEY: ${{ secrets.APP_KEY }}
-      APP_DEBUG: 'false'
-      APP_URL: ${{ vars.APP_URL }}
-      APP_LOCALE: en
-      APP_FALLBACK_LOCALE: en
-      APP_FAKER_LOCALE: en_US
-      BCRYPT_ROUNDS: '12'
-      LOG_CHANNEL: stack
-      LOG_STACK: single
-      LOG_LEVEL: info
-      DB_CONNECTION: pgsql
-      DB_HOST: ${{ secrets.DB_HOST }}
-      DB_PORT: ${{ secrets.DB_PORT }}
-      DB_DATABASE: ${{ secrets.DB_DATABASE }}
-      DB_USERNAME: ${{ secrets.DB_USERNAME }}
-      DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-      DB_SSLMODE: require
-      SESSION_DRIVER: database
-      CACHE_STORE: database
-      QUEUE_CONNECTION: database
-      BROADCAST_CONNECTION: log
-      FILESYSTEM_DISK: local
-      MAIL_MAILER: log
-      VITE_APP_NAME: Enderman Grief Control
 
     steps:
       - name: Checkout code
@@ -44,43 +17,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Setup PHP
-        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+      - name: Setup Laravel Artisan runtime
+        uses: ./.github/actions/setup-laravel-artisan
         with:
-          php-version: '8.4'
-          extensions: mbstring, pdo_pgsql, pgsql, zip
-          tools: composer:v2
-          coverage: none
-
-      - name: Check required secrets
-        run: |
-          missing=()
-
-          for name in APP_KEY DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD; do
-            if [[ -z "${!name}" ]]; then
-              missing+=("$name")
-            fi
-          done
-
-          if (( ${#missing[@]} > 0 )); then
-            printf 'Missing required GitHub Actions secrets: %s\n' "${missing[*]}"
-            exit 1
-          fi
-
-      - name: Prepare Laravel writable paths
-        run: |
-          mkdir -p \
-            storage/app/private \
-            storage/app/public \
-            storage/framework/cache/data \
-            storage/framework/sessions \
-            storage/framework/testing \
-            storage/framework/views \
-            storage/logs \
-            bootstrap/cache
-
-      - name: Install Composer dependencies
-        run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+          app-key: ${{ secrets.APP_KEY }}
+          app-url: ${{ vars.APP_URL }}
+          db-host: ${{ secrets.DB_HOST }}
+          db-port: ${{ secrets.DB_PORT }}
+          db-database: ${{ secrets.DB_DATABASE }}
+          db-username: ${{ secrets.DB_USERNAME }}
+          db-password: ${{ secrets.DB_PASSWORD }}
 
       - name: Prove Laravel boots
         run: php artisan about --only=environment

@@ -1,0 +1,56 @@
+name: Metrics Collection Validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    name: Validate metrics collection
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Laravel Artisan runtime
+        uses: ./.github/actions/setup-laravel-artisan
+        with:
+          app-key: ${{ secrets.APP_KEY }}
+          app-url: ${{ vars.APP_URL }}
+          db-host: ${{ secrets.DB_HOST }}
+          db-port: ${{ secrets.DB_PORT }}
+          db-database: ${{ secrets.DB_DATABASE }}
+          db-username: ${{ secrets.DB_USERNAME }}
+          db-password: ${{ secrets.DB_PASSWORD }}
+          curseforge-api-key: ${{ secrets.CURSEFORGE_API_KEY }}
+          require-curseforge-api-key: 'true'
+
+      - name: Prove database readiness
+        run: php artisan migrate:status --no-interaction
+
+      - name: Count snapshots before collection
+        id: before
+        run: |
+          count="$(php artisan tinker --execute='echo App\Models\MetricSnapshot::query()->count();')"
+          printf 'Snapshot count before collection: %s\n' "$count"
+          printf 'count=%s\n' "$count" >> "$GITHUB_OUTPUT"
+
+      - name: Run metrics collection
+        run: php artisan metrics:collect
+
+      - name: Verify snapshots increased
+        run: |
+          before="${{ steps.before.outputs.count }}"
+          after="$(php artisan tinker --execute='echo App\Models\MetricSnapshot::query()->count();')"
+
+          printf 'Snapshot count after collection: %s\n' "$after"
+
+          if (( after <= before )); then
+            printf 'Expected metrics collection to write at least one snapshot.\n'
+            exit 1
+          fi
