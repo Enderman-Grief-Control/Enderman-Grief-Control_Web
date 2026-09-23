@@ -35,4 +35,12 @@ return [
         ],
     ],
 
+    'modrinth' => [
+        'base_url' => env('MODRINTH_API_BASE_URL', 'https://api.modrinth.com/v2'),
+        'user_agent' => env(
+            'MODRINTH_USER_AGENT',
+            'EndermanGriefControlWeb/0.1 (+https://github.com/JackUlysses/enderman-grief-control)'
+        ),
+    ],
+
 ];
