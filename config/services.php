@@ -43,4 +43,9 @@ return [
         ),
     ],
 
+    'curseforge' => [
+        'base_url' => env('CURSEFORGE_API_BASE_URL', 'https://api.curseforge.com'),
+        'api_key' => env('CURSEFORGE_API_KEY'),
+    ],
+
 ];

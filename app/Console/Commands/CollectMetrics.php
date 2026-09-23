@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Analytics\Contracts\DistributionProvider;
+use App\Analytics\Providers\CurseForgeProvider;
 use App\Analytics\Providers\ModrinthProvider;
 use App\Analytics\RecordMetricSnapshot;
 use App\Models\Distribution;
@@ -13,6 +14,11 @@ use UnexpectedValueException;
 
 class CollectMetrics extends Command
 {
+    private const SUPPORTED_PROVIDERS = [
+        'modrinth',
+        'curseforge',
+    ];
+
     protected $signature = 'metrics:collect';
 
     protected $description = 'Collect distribution metrics and store historical snapshots.';
@@ -21,11 +27,12 @@ class CollectMetrics extends Command
     {
         $distributions = Distribution::query()
             ->where('active', true)
-            ->where('provider', 'modrinth')
+            ->whereIn('provider', self::SUPPORTED_PROVIDERS)
+            ->orderBy('id')
             ->get();
 
         if ($distributions->isEmpty()) {
-            $this->error('No active Modrinth distribution was found.');
+            $this->error('No active supported distributions were found.');
 
             return self::FAILURE;
         }
@@ -57,6 +64,7 @@ class CollectMetrics extends Command
     private function providerFor(Distribution $distribution): DistributionProvider
     {
         return match ($distribution->provider) {
+            'curseforge' => app(CurseForgeProvider::class),
             'modrinth' => app(ModrinthProvider::class),
             default =>
                 throw new UnexpectedValueException(
