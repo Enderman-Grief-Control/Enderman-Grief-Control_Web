@@ -12,10 +12,14 @@ Dockerfile is the source of truth for the first Render validation.
 - Root directory: repository root
 - Persistent disk: none
 - Scheduler: none on Render
+- Health check path: `/up`
 
 The container serves Laravel from `public/` through Apache and listens on
 Render's `PORT` environment variable. Apache enables `mod_rewrite` and allows
 Laravel's `public/.htaccess` overrides for application routing.
+
+Laravel trusts forwarded proxy headers so HTTPS requests terminated at Render
+still generate HTTPS asset, preload, and route URLs inside the container.
 
 ## Build Shape
 
@@ -48,7 +52,7 @@ APP_NAME
 APP_ENV=production
 APP_KEY
 APP_DEBUG=false
-APP_URL
+APP_URL=https://your-service.onrender.com
 APP_LOCALE
 APP_FALLBACK_LOCALE
 APP_FAKER_LOCALE
@@ -90,10 +94,11 @@ MODRINTH_USER_AGENT
 2. Select Docker as the runtime.
 3. Use the repository root.
 4. Configure the runtime environment variables above.
-5. Deploy and inspect logs for PHP extension, Composer, npm, Wayfinder, and
+5. Set the health check path to `/up`.
+6. Deploy and inspect logs for PHP extension, Composer, npm, Wayfinder, and
    Vite failures.
-6. Confirm the app responds at the Render URL.
-7. Confirm login and dashboard behavior against the already-migrated Supabase
+7. Confirm the app responds at the Render URL.
+8. Confirm login and dashboard behavior against the already-migrated Supabase
    database.
 
 Do not run migrations from the web start command. If migrations are needed
