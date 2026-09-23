@@ -18,6 +18,9 @@ The container serves Laravel from `public/` through Apache and listens on
 Render's `PORT` environment variable. Apache enables `mod_rewrite` and allows
 Laravel's `public/.htaccess` overrides for application routing.
 
+Laravel trusts forwarded proxy headers so HTTPS requests terminated at Render
+still generate HTTPS asset, preload, and route URLs inside the container.
+
 ## Build Shape
 
 The Docker image installs:
@@ -49,7 +52,7 @@ APP_NAME
 APP_ENV=production
 APP_KEY
 APP_DEBUG=false
-APP_URL
+APP_URL=https://your-service.onrender.com
 APP_LOCALE
 APP_FALLBACK_LOCALE
 APP_FAKER_LOCALE
