@@ -54,6 +54,11 @@ Render deployment notes live in
 production-shaped direction is a Docker-backed Render Web Service connected to
 managed PostgreSQL.
 
+Production metrics collection notes live in
+[`docs/deployment/metrics-collection.md`](docs/deployment/metrics-collection.md).
+The scheduled collector runs through GitHub Actions against Supabase
+PostgreSQL; Render does not run the production collection schedule.
+
 ## Metrics collection
 
 The authenticated dashboard reads stored metric snapshots. It does not call
@@ -71,14 +76,9 @@ Required server-side configuration:
 - Modrinth collection currently uses public project metadata and does not need
   an API key.
 
-The Laravel scheduler registers `metrics:collect` every 6 hours in
-`America/Los_Angeles`. In production, configure the standard Laravel scheduler
-cron entrypoint on the host:
-
-```cron
-* * * * * cd /path/to/app && php artisan schedule:run >> /dev/null 2>&1
-```
-
+The Laravel scheduler registers `metrics:collect` every 6 hours for hosts that
+run `php artisan schedule:run`. Current production collection is instead driven
+by GitHub Actions so it can run independently of the Render web service.
 Scheduled runs use the same behavior as manual runs. Missing CurseForge
 credentials or provider errors cause the command to fail; details are emitted
 to the command output and Laravel logs. Successful reruns append new snapshots
