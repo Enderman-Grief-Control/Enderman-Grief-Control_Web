@@ -66,10 +66,9 @@ class CollectMetrics extends Command
         return match ($distribution->provider) {
             'curseforge' => app(CurseForgeProvider::class),
             'modrinth' => app(ModrinthProvider::class),
-            default =>
-                throw new UnexpectedValueException(
-                    "Unsupported distribution provider [{$distribution->provider}]."
-                ),
+            default => throw new UnexpectedValueException(
+                "Unsupported distribution provider [{$distribution->provider}]."
+            ),
         };
     }
 }
