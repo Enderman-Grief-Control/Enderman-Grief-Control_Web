@@ -1,37 +1,5 @@
 name: Setup Laravel Artisan
-description: Prepare a production-shaped Laravel runtime for Artisan validation workflows.
-
-inputs:
-  app-key:
-    description: Laravel APP_KEY.
-    required: true
-  app-url:
-    description: Laravel APP_URL.
-    required: false
-    default: ''
-  db-host:
-    description: PostgreSQL host.
-    required: true
-  db-port:
-    description: PostgreSQL port.
-    required: true
-  db-database:
-    description: PostgreSQL database name.
-    required: true
-  db-username:
-    description: PostgreSQL username.
-    required: true
-  db-password:
-    description: PostgreSQL password.
-    required: true
-  curseforge-api-key:
-    description: CurseForge API key for metrics collection.
-    required: false
-    default: ''
-  require-curseforge-api-key:
-    description: Whether CURSEFORGE_API_KEY is required for this workflow.
-    required: false
-    default: 'false'
+description: Prepare a non-secret Laravel runtime for Artisan validation workflows.
 
 runs:
   using: composite
@@ -43,70 +11,6 @@ runs:
         extensions: mbstring, pdo_pgsql, pgsql, zip
         tools: composer:v2
         coverage: none
-
-    - name: Export Laravel environment
-      shell: bash
-      run: |
-        {
-          printf 'APP_NAME=Enderman Grief Control\n'
-          printf 'APP_ENV=production\n'
-          printf 'APP_KEY=%s\n' "${{ inputs.app-key }}"
-          printf 'APP_DEBUG=false\n'
-          printf 'APP_URL=%s\n' "${{ inputs.app-url }}"
-          printf 'APP_LOCALE=en\n'
-          printf 'APP_FALLBACK_LOCALE=en\n'
-          printf 'APP_FAKER_LOCALE=en_US\n'
-          printf 'BCRYPT_ROUNDS=12\n'
-          printf 'LOG_CHANNEL=stack\n'
-          printf 'LOG_STACK=single\n'
-          printf 'LOG_LEVEL=info\n'
-          printf 'DB_CONNECTION=pgsql\n'
-          printf 'DB_HOST=%s\n' "${{ inputs.db-host }}"
-          printf 'DB_PORT=%s\n' "${{ inputs.db-port }}"
-          printf 'DB_DATABASE=%s\n' "${{ inputs.db-database }}"
-          printf 'DB_USERNAME=%s\n' "${{ inputs.db-username }}"
-          printf 'DB_PASSWORD=%s\n' "${{ inputs.db-password }}"
-          printf 'DB_SSLMODE=require\n'
-          printf 'SESSION_DRIVER=database\n'
-          printf 'CACHE_STORE=database\n'
-          printf 'QUEUE_CONNECTION=database\n'
-          printf 'BROADCAST_CONNECTION=log\n'
-          printf 'FILESYSTEM_DISK=local\n'
-          printf 'MAIL_MAILER=log\n'
-          printf 'VITE_APP_NAME=Enderman Grief Control\n'
-          printf 'CURSEFORGE_API_KEY=%s\n' "${{ inputs.curseforge-api-key }}"
-        } >> "$GITHUB_ENV"
-
-    - name: Check required environment
-      shell: bash
-      env:
-        APP_KEY_INPUT: ${{ inputs.app-key }}
-        DB_HOST_INPUT: ${{ inputs.db-host }}
-        DB_PORT_INPUT: ${{ inputs.db-port }}
-        DB_DATABASE_INPUT: ${{ inputs.db-database }}
-        DB_USERNAME_INPUT: ${{ inputs.db-username }}
-        DB_PASSWORD_INPUT: ${{ inputs.db-password }}
-        CURSEFORGE_API_KEY_INPUT: ${{ inputs.curseforge-api-key }}
-        REQUIRE_CURSEFORGE_API_KEY: ${{ inputs.require-curseforge-api-key }}
-      run: |
-        missing=()
-
-        for name in APP_KEY DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD; do
-          input_name="${name}_INPUT"
-
-          if [[ -z "${!input_name}" ]]; then
-            missing+=("$name")
-          fi
-        done
-
-        if [[ "$REQUIRE_CURSEFORGE_API_KEY" == "true" && -z "$CURSEFORGE_API_KEY_INPUT" ]]; then
-          missing+=("CURSEFORGE_API_KEY")
-        fi
-
-        if (( ${#missing[@]} > 0 )); then
-          printf 'Missing required GitHub Actions secrets: %s\n' "${missing[*]}"
-          exit 1
-        fi
 
     - name: Prepare Laravel writable paths
       shell: bash
@@ -123,4 +27,16 @@ runs:
 
     - name: Install Composer dependencies
       shell: bash
+      env:
+        APP_ENV: production
+        APP_DEBUG: 'false'
+        APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        DB_CONNECTION: sqlite
+        DB_DATABASE: ':memory:'
+        SESSION_DRIVER: array
+        CACHE_STORE: array
+        QUEUE_CONNECTION: sync
+        BROADCAST_CONNECTION: log
+        FILESYSTEM_DISK: local
+        MAIL_MAILER: log
       run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader

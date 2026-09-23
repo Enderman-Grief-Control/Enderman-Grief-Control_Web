@@ -10,6 +10,7 @@ jobs:
   boot:
     name: Boot Laravel for Artisan validation
     runs-on: ubuntu-latest
+    environment: production
 
     steps:
       - name: Checkout code
@@ -19,17 +20,61 @@ jobs:
 
       - name: Setup Laravel Artisan runtime
         uses: ./.github/actions/setup-laravel-artisan
-        with:
-          app-key: ${{ secrets.APP_KEY }}
-          app-url: ${{ vars.APP_URL }}
-          db-host: ${{ secrets.DB_HOST }}
-          db-port: ${{ secrets.DB_PORT }}
-          db-database: ${{ secrets.DB_DATABASE }}
-          db-username: ${{ secrets.DB_USERNAME }}
-          db-password: ${{ secrets.DB_PASSWORD }}
+
+      - name: Check required production secrets
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          missing=()
+
+          for name in APP_KEY DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required GitHub Actions secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
 
       - name: Prove Laravel boots
+        env:
+          APP_ENV: production
+          APP_DEBUG: 'false'
+          APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+          DB_CONNECTION: sqlite
+          DB_DATABASE: ':memory:'
+          SESSION_DRIVER: array
+          CACHE_STORE: array
+          QUEUE_CONNECTION: sync
+          BROADCAST_CONNECTION: log
+          FILESYSTEM_DISK: local
+          MAIL_MAILER: log
         run: php artisan about --only=environment
 
       - name: Prove database connection
+        env:
+          APP_ENV: production
+          APP_DEBUG: 'false'
+          APP_URL: ${{ vars.APP_URL }}
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_CONNECTION: pgsql
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_SSLMODE: require
+          SESSION_DRIVER: database
+          CACHE_STORE: database
+          QUEUE_CONNECTION: database
+          BROADCAST_CONNECTION: log
+          FILESYSTEM_DISK: local
+          MAIL_MAILER: log
         run: php artisan migrate:status --no-interaction
