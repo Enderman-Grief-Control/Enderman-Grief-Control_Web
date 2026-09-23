@@ -13,6 +13,7 @@
 
 # PHP / Laravel dependencies and local artifacts
 /vendor/
+/.tools/
 /.phpunit.cache
 /.phpunit.result.cache
 /auth.json
