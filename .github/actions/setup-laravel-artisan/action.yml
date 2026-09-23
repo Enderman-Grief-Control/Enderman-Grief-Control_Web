@@ -1,0 +1,42 @@
+name: Setup Laravel Artisan
+description: Prepare a non-secret Laravel runtime for Artisan validation workflows.
+
+runs:
+  using: composite
+  steps:
+    - name: Setup PHP
+      uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+      with:
+        php-version: '8.4'
+        extensions: mbstring, pdo_pgsql, pgsql, zip
+        tools: composer:v2
+        coverage: none
+
+    - name: Prepare Laravel writable paths
+      shell: bash
+      run: |
+        mkdir -p \
+          storage/app/private \
+          storage/app/public \
+          storage/framework/cache/data \
+          storage/framework/sessions \
+          storage/framework/testing \
+          storage/framework/views \
+          storage/logs \
+          bootstrap/cache
+
+    - name: Install Composer dependencies
+      shell: bash
+      env:
+        APP_ENV: production
+        APP_DEBUG: 'false'
+        APP_KEY: base64:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
+        DB_CONNECTION: sqlite
+        DB_DATABASE: ':memory:'
+        SESSION_DRIVER: array
+        CACHE_STORE: array
+        QUEUE_CONNECTION: sync
+        BROADCAST_CONNECTION: log
+        FILESYSTEM_DISK: local
+        MAIL_MAILER: log
+      run: composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader

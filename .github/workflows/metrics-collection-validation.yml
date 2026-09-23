@@ -1,0 +1,142 @@
+name: Metrics Collection Validation
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    name: Validate metrics collection
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Laravel Artisan runtime
+        uses: ./.github/actions/setup-laravel-artisan
+
+      - name: Check required production database secrets
+        env:
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+        run: |
+          missing=()
+
+          for name in APP_KEY DB_HOST DB_PORT DB_DATABASE DB_USERNAME DB_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              missing+=("$name")
+            fi
+          done
+
+          if (( ${#missing[@]} > 0 )); then
+            printf 'Missing required GitHub Actions secrets: %s\n' "${missing[*]}"
+            exit 1
+          fi
+
+      - name: Prove database readiness
+        env:
+          APP_ENV: production
+          APP_DEBUG: 'false'
+          APP_URL: ${{ vars.APP_URL }}
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_CONNECTION: pgsql
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_SSLMODE: require
+          SESSION_DRIVER: database
+          CACHE_STORE: database
+          QUEUE_CONNECTION: database
+          BROADCAST_CONNECTION: log
+          FILESYSTEM_DISK: local
+          MAIL_MAILER: log
+        run: php artisan migrate:status --no-interaction
+
+      - name: Count snapshots before collection
+        id: before
+        env:
+          APP_ENV: production
+          APP_DEBUG: 'false'
+          APP_URL: ${{ vars.APP_URL }}
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_CONNECTION: pgsql
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_SSLMODE: require
+          SESSION_DRIVER: database
+          CACHE_STORE: database
+          QUEUE_CONNECTION: database
+          BROADCAST_CONNECTION: log
+          FILESYSTEM_DISK: local
+          MAIL_MAILER: log
+        run: |
+          count="$(php artisan tinker --execute='echo App\Models\MetricSnapshot::query()->count();')"
+          printf 'Snapshot count before collection: %s\n' "$count"
+          printf 'count=%s\n' "$count" >> "$GITHUB_OUTPUT"
+
+      - name: Run metrics collection
+        env:
+          APP_ENV: production
+          APP_DEBUG: 'false'
+          APP_URL: ${{ vars.APP_URL }}
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_CONNECTION: pgsql
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_SSLMODE: require
+          SESSION_DRIVER: database
+          CACHE_STORE: database
+          QUEUE_CONNECTION: database
+          BROADCAST_CONNECTION: log
+          FILESYSTEM_DISK: local
+          MAIL_MAILER: log
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+        run: php artisan metrics:collect
+
+      - name: Verify snapshots increased
+        env:
+          APP_ENV: production
+          APP_DEBUG: 'false'
+          APP_URL: ${{ vars.APP_URL }}
+          APP_KEY: ${{ secrets.APP_KEY }}
+          DB_CONNECTION: pgsql
+          DB_HOST: ${{ secrets.DB_HOST }}
+          DB_PORT: ${{ secrets.DB_PORT }}
+          DB_DATABASE: ${{ secrets.DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_SSLMODE: require
+          SESSION_DRIVER: database
+          CACHE_STORE: database
+          QUEUE_CONNECTION: database
+          BROADCAST_CONNECTION: log
+          FILESYSTEM_DISK: local
+          MAIL_MAILER: log
+        run: |
+          before="${{ steps.before.outputs.count }}"
+          after="$(php artisan tinker --execute='echo App\Models\MetricSnapshot::query()->count();')"
+
+          printf 'Snapshot count after collection: %s\n' "$after"
+
+          if (( after <= before )); then
+            printf 'Expected metrics collection to write at least one snapshot.\n'
+            exit 1
+          fi
