@@ -36,6 +36,31 @@ composer run dev   # runs the PHP server, queue listener, and Vite dev server to
 
 The app serves at `http://localhost:8000` by default.
 
+## Public site scaffold
+
+The public Astro site lives in `site/` and uses its own npm dependencies and
+lockfile. Root npm and Composer commands remain scoped to the private
+Laravel/Inertia dashboard.
+
+```bash
+cd site
+npm install
+npm run dev
+```
+
+The Astro dev server prints its local URL when it starts.
+
+To build and preview the public site:
+
+```bash
+cd site
+npm run build
+npm run preview
+```
+
+Netlify builds the public Astro site from `site/`. Render builds the private
+Laravel app from the repository root.
+
 ## Database
 
 - Local development uses PostgreSQL via `docker compose up -d` (one service,
