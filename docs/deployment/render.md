@@ -78,6 +78,9 @@ FILESYSTEM_DISK=local
 VITE_APP_NAME
 ```
 
+`PUBLIC_SITE_URL` is optional. It sets where the auth-page logo links, and
+defaults to `https://enderman-grief-control.netlify.app` when unset or empty.
+
 Provider variables should not be set on Render under the current architecture.
 Scheduled metric collection is intended to run independently through GitHub
 Actions, which will receive the provider credentials required by
