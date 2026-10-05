@@ -4,6 +4,9 @@ This project deploys to Render as a Docker-backed Web Service. Render does not
 currently provide a native PHP runtime for this Laravel app, so the repository
 Dockerfile is the source of truth for the first Render validation.
 
+For the full service map, see
+[Deployment Architecture](architecture.md).
+
 ## Service
 
 - Service type: Web Service
@@ -82,9 +85,9 @@ VITE_APP_NAME
 defaults to `https://enderman-grief-control.netlify.app` when unset or empty.
 
 Provider variables should not be set on Render under the current architecture.
-Scheduled metric collection is intended to run independently through GitHub
-Actions, which will receive the provider credentials required by
-`metrics:collect` in a later workflow.
+Scheduled metric collection runs independently through GitHub Actions, which
+receives the provider credentials required by `metrics:collect`. See
+[Production Metrics Collection](metrics-collection.md).
 
 ```text
 CURSEFORGE_API_KEY

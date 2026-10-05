@@ -12,6 +12,7 @@ import vanillaGrief from '../assets/screenshots/vanilla-grief-sunset-field.png';
 const title = 'Enderman Grief Control';
 const description =
   'Stop endermen from picking up and placing blocks without turning off mobGriefing. A lightweight Paper plugin and Fabric mod for Minecraft 1.21.';
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
 
 const features = [
   {
@@ -40,9 +41,11 @@ const officialLinks = [...distributions, github];
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{`${title}: stop Enderman griefing on Paper and Fabric`}</title>
+    <link rel="canonical" href={canonicalUrl} />
     <meta name="description" content={description} />
     <meta name="theme-color" content="#09090b" />
     <meta property="og:type" content="website" />
+    <meta property="og:url" content={canonicalUrl} />
     <meta property="og:site_name" content={title} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />

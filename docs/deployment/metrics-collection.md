@@ -4,6 +4,9 @@ Production metric snapshots are collected by GitHub Actions, not by the Render
 web service. The scheduled workflow runs Artisan directly against the production
 Supabase PostgreSQL database.
 
+For the full service map, see
+[Deployment Architecture](architecture.md).
+
 ## Workflow
 
 - Workflow file: `.github/workflows/metrics-collection-scheduled.yml`
