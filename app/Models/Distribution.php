@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, MetricSnapshot> $metricSnapshots
+ * @property-read Collection<int, DistributionVersion> $versions
  */
 #[Fillable(['provider', 'name', 'loader', 'project_identifier', 'listing_url', 'active'])]
 class Distribution extends Model
@@ -29,6 +30,14 @@ class Distribution extends Model
     public function metricSnapshots(): HasMany
     {
         return $this->hasMany(MetricSnapshot::class);
+    }
+
+    /**
+     * @return HasMany<DistributionVersion, $this>
+     */
+    public function versions(): HasMany
+    {
+        return $this->hasMany(DistributionVersion::class);
     }
 
     /**
