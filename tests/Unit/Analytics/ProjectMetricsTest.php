@@ -3,6 +3,7 @@
 namespace Tests\Unit\Analytics;
 
 use App\Analytics\Contracts\DistributionProvider;
+use App\Analytics\DistributionVersionMetrics;
 use App\Analytics\ProjectMetrics;
 use App\Models\Distribution;
 use Carbon\CarbonImmutable;
@@ -64,6 +65,14 @@ class ProjectMetricsTest extends TestCase
             public function getProjectMetrics(Distribution $distribution): ProjectMetrics
             {
                 return new ProjectMetrics(downloads: 10, likes: 2);
+            }
+
+            /**
+             * @return list<DistributionVersionMetrics>
+             */
+            public function getVersionMetrics(Distribution $distribution): array
+            {
+                return [];
             }
         };
 

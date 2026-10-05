@@ -3,6 +3,7 @@
 namespace Tests\Feature\Analytics;
 
 use App\Analytics\Contracts\DistributionProvider;
+use App\Analytics\DistributionVersionMetrics;
 use App\Analytics\ProjectMetrics;
 use App\Analytics\RecordMetricSnapshot;
 use App\Models\Distribution;
@@ -30,6 +31,14 @@ class RecordMetricSnapshotTest extends TestCase
                     likes: 78,
                     capturedAt: $this->capturedAt,
                 );
+            }
+
+            /**
+             * @return list<DistributionVersionMetrics>
+             */
+            public function getVersionMetrics(Distribution $distribution): array
+            {
+                return [];
             }
         };
 
