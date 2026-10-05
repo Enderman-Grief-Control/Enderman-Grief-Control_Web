@@ -56,6 +56,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Public Site URL
+    |--------------------------------------------------------------------------
+    |
+    | The public project site lives outside this app. Auth pages link their
+    | logo back to it instead of to the private dashboard.
+    |
+    */
+
+    'public_site_url' => env('PUBLIC_SITE_URL') ?: 'https://enderman-grief-control.netlify.app',
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |
