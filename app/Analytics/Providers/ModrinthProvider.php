@@ -3,8 +3,10 @@
 namespace App\Analytics\Providers;
 
 use App\Analytics\Contracts\DistributionProvider;
+use App\Analytics\DistributionVersionMetrics;
 use App\Analytics\ProjectMetrics;
 use App\Models\Distribution;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\PendingRequest;
 use UnexpectedValueException;
@@ -25,10 +27,35 @@ final readonly class ModrinthProvider implements DistributionProvider
         }
 
         return new ProjectMetrics(
-            downloads: $this->integerMetric($response, 'downloads'),
-            followers: $this->integerMetric($response, 'followers'),
+            downloads: $this->integerMetric($response, 'downloads', 'Modrinth project response'),
+            followers: $this->integerMetric($response, 'followers', 'Modrinth project response'),
             likes: null,
         );
+    }
+
+    /**
+     * @return list<DistributionVersionMetrics>
+     */
+    public function getVersionMetrics(Distribution $distribution): array
+    {
+        $response = $this->client()
+            ->get("/project/{$distribution->project_identifier}/version")
+            ->throw()
+            ->json();
+
+        if (! is_array($response)) {
+            throw new UnexpectedValueException('Modrinth project versions response must be a JSON array.');
+        }
+
+        $capturedAt = CarbonImmutable::now();
+        $versions = [];
+
+        /** @var list<array<array-key, mixed>> $response */
+        foreach ($response as $version) {
+            $versions[] = $this->versionMetrics($version, $capturedAt);
+        }
+
+        return $versions;
     }
 
     private function client(): PendingRequest
@@ -64,12 +91,83 @@ final readonly class ModrinthProvider implements DistributionProvider
     /**
      * @param  array<array-key, mixed>  $payload
      */
-    private function integerMetric(array $payload, string $field): int
+    private function versionMetrics(array $payload, CarbonImmutable $capturedAt): DistributionVersionMetrics
+    {
+        return new DistributionVersionMetrics(
+            providerVersionIdentifier: $this->stringMetric($payload, 'id', 'Modrinth version response'),
+            versionNumber: $this->stringMetric($payload, 'version_number', 'Modrinth version response'),
+            displayName: $this->stringMetric($payload, 'name', 'Modrinth version response'),
+            loaders: $this->stringListMetric($payload, 'loaders', 'Modrinth version response'),
+            gameVersions: $this->stringListMetric($payload, 'game_versions', 'Modrinth version response'),
+            downloads: $this->integerMetric($payload, 'downloads', 'Modrinth version response'),
+            publishedAt: $this->dateTimeMetric($payload, 'date_published', 'Modrinth version response'),
+            capturedAt: $capturedAt,
+            metadata: $this->versionMetadata($payload),
+        );
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $payload
+     */
+    private function integerMetric(array $payload, string $field, string $context): int
     {
         if (! array_key_exists($field, $payload) || ! is_int($payload[$field])) {
-            throw new UnexpectedValueException("Modrinth project response field [{$field}] must be an integer.");
+            throw new UnexpectedValueException("{$context} field [{$field}] must be an integer.");
         }
 
         return $payload[$field];
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $payload
+     */
+    private function stringMetric(array $payload, string $field, string $context): string
+    {
+        if (! array_key_exists($field, $payload) || ! is_string($payload[$field]) || trim($payload[$field]) === '') {
+            throw new UnexpectedValueException("{$context} field [{$field}] must be a non-empty string.");
+        }
+
+        return $payload[$field];
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $payload
+     * @return list<string>
+     */
+    private function stringListMetric(array $payload, string $field, string $context): array
+    {
+        if (! array_key_exists($field, $payload) || ! is_array($payload[$field])) {
+            throw new UnexpectedValueException("{$context} field [{$field}] must be a JSON array of strings.");
+        }
+
+        /** @var list<string> $values */
+        $values = array_values($payload[$field]);
+
+        return $values;
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $payload
+     */
+    private function dateTimeMetric(array $payload, string $field, string $context): CarbonImmutable
+    {
+        $value = $this->stringMetric($payload, $field, $context);
+
+        return CarbonImmutable::parse($value);
+    }
+
+    /**
+     * @param  array<array-key, mixed>  $payload
+     * @return array<string, mixed>|null
+     */
+    private function versionMetadata(array $payload): ?array
+    {
+        $versionType = $payload['version_type'] ?? null;
+
+        if (is_string($versionType) && trim($versionType) !== '') {
+            return ['version_type' => $versionType];
+        }
+
+        return null;
     }
 }
