@@ -115,13 +115,27 @@ Required server-side configuration:
 - Modrinth collection currently uses public project metadata and does not need
   an API key.
 
+Each successful distribution collection writes an aggregate row to
+`metric_snapshots` first. It then collects version/file details into
+`distribution_versions` and appends detailed download history to
+`distribution_version_snapshots`.
+
+Aggregate snapshots remain the canonical source for dashboard distribution
+totals. Detailed snapshots are retained for later growth, loader, version, and
+file-level analytics; summed detailed downloads may differ from provider
+aggregate totals.
+
 The Laravel scheduler registers `metrics:collect` every 6 hours for hosts that
 run `php artisan schedule:run`. Current production collection is instead driven
 by GitHub Actions so it can run independently of the Render web service.
 Scheduled runs use the same behavior as manual runs. Missing CurseForge
 credentials or provider errors cause the command to fail; details are emitted
-to the command output and Laravel logs. Successful reruns append new snapshots
-instead of deduplicating captures.
+to the command output and Laravel logs. If aggregate collection succeeds but
+detailed collection fails, the aggregate snapshot is kept and the command still
+returns a failure code so scheduled collection remains visibly degraded.
+Successful reruns append new aggregate and detailed snapshots instead of
+deduplicating captures; version/file identity rows are upserted by provider
+identifier.
 
 To verify local collection, inspect the latest snapshots with Tinker:
 
@@ -135,6 +149,19 @@ App\Models\MetricSnapshot::query()
     ->latest('captured_at')
     ->take(5)
     ->get(['id', 'distribution_id', 'downloads', 'captured_at']);
+```
+
+Detailed version/file captures can be inspected separately:
+
+```php
+App\Models\DistributionVersion::query()
+    ->with([
+        'distribution:id,provider,name',
+        'snapshots' => fn ($query) => $query->latest('captured_at')->limit(1),
+    ])
+    ->latest('published_at')
+    ->take(5)
+    ->get(['id', 'distribution_id', 'provider_version_identifier', 'display_name']);
 ```
 
 ## Auth Notes
