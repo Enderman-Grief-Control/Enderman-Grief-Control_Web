@@ -80,18 +80,22 @@ final readonly class DistributionVersionMetrics
     }
 
     /**
-     * @param  list<string>  $values
+     * @param  array<mixed>  $values
      * @return list<string>
      */
     private function stringList(string $field, array $values): array
     {
+        $strings = [];
+
         foreach ($values as $value) {
             if (! is_string($value) || trim($value) === '') {
                 throw new InvalidArgumentException("Distribution version metric [{$field}] must be a list of non-empty strings.");
             }
+
+            $strings[] = $value;
         }
 
-        return array_values($values);
+        return $strings;
     }
 
     private function assertNonNegative(string $metric, int $value): void
