@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Analytics\Contracts\DistributionProvider;
 use App\Analytics\Providers\CurseForgeProvider;
 use App\Analytics\Providers\ModrinthProvider;
+use App\Analytics\RecordDistributionVersionSnapshots;
 use App\Analytics\RecordMetricSnapshot;
 use App\Models\Distribution;
 use Illuminate\Console\Command;
@@ -23,8 +24,10 @@ class CollectMetrics extends Command
 
     protected $description = 'Collect distribution metrics and store historical snapshots.';
 
-    public function handle(RecordMetricSnapshot $recordMetricSnapshot): int
-    {
+    public function handle(
+        RecordMetricSnapshot $recordMetricSnapshot,
+        RecordDistributionVersionSnapshots $recordDistributionVersionSnapshots,
+    ): int {
         $distributions = Distribution::query()
             ->where('active', true)
             ->whereIn('provider', self::SUPPORTED_PROVIDERS)
@@ -38,12 +41,15 @@ class CollectMetrics extends Command
         }
 
         foreach ($distributions as $distribution) {
+            $label = "{$distribution->provider}/{$distribution->name}";
+
             try {
-                $metrics = $this->providerFor($distribution)->getProjectMetrics($distribution);
+                $provider = $this->providerFor($distribution);
+                $metrics = $provider->getProjectMetrics($distribution);
 
                 $recordMetricSnapshot($distribution, $metrics);
 
-                $this->info("Collected {$distribution->provider}/{$distribution->name}: {$metrics->downloads} downloads.");
+                $this->info("Collected {$label}: {$metrics->downloads} downloads.");
             } catch (Throwable $exception) {
                 Log::error('Metric collection failed.', [
                     'distribution_id' => $distribution->id,
@@ -52,7 +58,25 @@ class CollectMetrics extends Command
                     'exception' => $exception,
                 ]);
 
-                $this->error("Failed to collect {$distribution->provider}/{$distribution->name}: {$exception->getMessage()}");
+                $this->error("Failed to collect {$label}: {$exception->getMessage()}");
+
+                return self::FAILURE;
+            }
+
+            try {
+                $versionMetrics = $provider->getVersionMetrics($distribution);
+                $recordedSnapshots = $recordDistributionVersionSnapshots($distribution, $versionMetrics);
+
+                $this->info("Collected {$label} details: {$recordedSnapshots} version/file snapshots.");
+            } catch (Throwable $exception) {
+                Log::error('Detailed metric collection failed.', [
+                    'distribution_id' => $distribution->id,
+                    'provider' => $distribution->provider,
+                    'name' => $distribution->name,
+                    'exception' => $exception,
+                ]);
+
+                $this->error("Failed to collect detailed metrics for {$label}: {$exception->getMessage()}");
 
                 return self::FAILURE;
             }

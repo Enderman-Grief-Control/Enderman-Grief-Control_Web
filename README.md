@@ -1,24 +1,39 @@
-# Enderman Grief Control — Web
+# Enderman Grief Control - Web
 
-Laravel + React (TypeScript) + Inertia + Tailwind CSS + shadcn/ui, backed by
-PostgreSQL.
+This repository contains two apps for Enderman Grief Control:
+
+- Public site: Astro + TypeScript in `site/`, deployed to Netlify at
+  `https://enderman-grief-control.netlify.app/`.
+- Private dashboard: Laravel + Inertia + React at the repository root,
+  deployed to Render at `https://enderman-grief-control.onrender.com/`.
+
+For the service map and data ownership boundaries, see
+[`docs/deployment/architecture.md`](docs/deployment/architecture.md).
 
 ## Stack
 
-- **Backend:** Laravel 13, PostgreSQL
-- **Frontend:** React 19 + TypeScript, Inertia, Tailwind CSS v4, shadcn/ui
-- **Auth:** Laravel Fortify (session-based). Public registration is disabled
-  — see [Auth notes](#auth-notes) below.
+- **Public site:** Astro, TypeScript, Tailwind CSS v4, React integration for
+  future islands
+- **Private backend:** Laravel 13, PostgreSQL
+- **Private frontend:** React 19 + TypeScript, Inertia, Tailwind CSS v4,
+  shadcn/ui
+- **Auth:** Laravel Fortify (session-based). Public registration is disabled;
+  see [Auth notes](#auth-notes) below.
 
 ## Requirements
 
-- PHP 8.4+ with the `pdo_pgsql` extension (e.g. [Laravel Herd](https://herd.laravel.com/))
+- PHP 8.4+ with the `pdo_pgsql` extension (e.g.
+  [Laravel Herd](https://herd.laravel.com/))
 - Composer
 - Node.js 22+ and npm
 - Docker Desktop (for local PostgreSQL via Docker Compose), or a local
   PostgreSQL install
 
-## Local setup
+## Local Setup
+
+### Private App
+
+The private Laravel/Inertia dashboard lives at the repository root.
 
 ```bash
 composer install
@@ -34,9 +49,9 @@ npm run build   # or `npm run dev` for a live-reloading dev build
 composer run dev   # runs the PHP server, queue listener, and Vite dev server together
 ```
 
-The app serves at `http://localhost:8000` by default.
+The private app serves at `http://localhost:8000` by default.
 
-## Public site scaffold
+### Public Site
 
 The public Astro site lives in `site/` and uses its own npm dependencies and
 lockfile. Root npm and Composer commands remain scoped to the private
@@ -50,10 +65,11 @@ npm run dev
 
 The Astro dev server prints its local URL when it starts.
 
-To build and preview the public site:
+To check, build, and preview the public site:
 
 ```bash
 cd site
+npm run check
 npm run build
 npm run preview
 ```
@@ -66,25 +82,23 @@ Laravel app from the repository root.
 - Local development uses PostgreSQL via `docker compose up -d` (one service,
   port `5432`, named volume `egc-postgres-data`) or any local PostgreSQL
   instance reachable via the `DB_*` variables in `.env`.
-- Production is expected to use a managed PostgreSQL provider (e.g. Neon,
-  Railway, Render, Supabase-as-Postgres). This repo does not configure or
-  assume self-hosted production PostgreSQL.
+- Production uses Supabase PostgreSQL for private analytics snapshots and app
+  data. Later phases may add a narrow public read model for public stats.
 - Tests run against an in-memory SQLite database (see `phpunit.xml`) and do
   not require PostgreSQL to be running.
 
 ## Deployment
 
-Render deployment notes live in
-[`docs/deployment/render.md`](docs/deployment/render.md). The current
-production-shaped direction is a Docker-backed Render Web Service connected to
-managed PostgreSQL.
+- [Deployment architecture](docs/deployment/architecture.md) explains how
+  Netlify, Render, Supabase, and GitHub Actions fit together.
+- [Netlify deployment](docs/deployment/netlify.md) covers the public Astro
+  site.
+- [Render deployment](docs/deployment/render.md) covers the private
+  Laravel/Inertia app.
+- [Production metrics collection](docs/deployment/metrics-collection.md)
+  covers the scheduled GitHub Actions collector.
 
-Production metrics collection notes live in
-[`docs/deployment/metrics-collection.md`](docs/deployment/metrics-collection.md).
-The scheduled collector runs through GitHub Actions against Supabase
-PostgreSQL; Render does not run the production collection schedule.
-
-## Metrics collection
+## Metrics Collection
 
 The authenticated dashboard reads stored metric snapshots. It does not call
 Modrinth or CurseForge during page render.
@@ -101,13 +115,27 @@ Required server-side configuration:
 - Modrinth collection currently uses public project metadata and does not need
   an API key.
 
+Each successful distribution collection writes an aggregate row to
+`metric_snapshots` first. It then collects version/file details into
+`distribution_versions` and appends detailed download history to
+`distribution_version_snapshots`.
+
+Aggregate snapshots remain the canonical source for dashboard distribution
+totals. Detailed snapshots are retained for later growth, loader, version, and
+file-level analytics; summed detailed downloads may differ from provider
+aggregate totals.
+
 The Laravel scheduler registers `metrics:collect` every 6 hours for hosts that
 run `php artisan schedule:run`. Current production collection is instead driven
 by GitHub Actions so it can run independently of the Render web service.
 Scheduled runs use the same behavior as manual runs. Missing CurseForge
 credentials or provider errors cause the command to fail; details are emitted
-to the command output and Laravel logs. Successful reruns append new snapshots
-instead of deduplicating captures.
+to the command output and Laravel logs. If aggregate collection succeeds but
+detailed collection fails, the aggregate snapshot is kept and the command still
+returns a failure code so scheduled collection remains visibly degraded.
+Successful reruns append new aggregate and detailed snapshots instead of
+deduplicating captures; version/file identity rows are upserted by provider
+identifier.
 
 To verify local collection, inspect the latest snapshots with Tinker:
 
@@ -123,24 +151,47 @@ App\Models\MetricSnapshot::query()
     ->get(['id', 'distribution_id', 'downloads', 'captured_at']);
 ```
 
-## Auth notes
+Detailed version/file captures can be inspected separately:
+
+```php
+App\Models\DistributionVersion::query()
+    ->with([
+        'distribution:id,provider,name',
+        'snapshots' => fn ($query) => $query->latest('captured_at')->limit(1),
+    ])
+    ->latest('published_at')
+    ->take(5)
+    ->get(['id', 'distribution_id', 'provider_version_identifier', 'display_name']);
+```
+
+## Auth Notes
 
 This app uses Laravel Fortify for session-based auth. Public registration is
 intentionally disabled (`config/fortify.php`) since this project is a private
-analytics dashboard, not a public multi-tenant app — accounts are provisioned
-manually (e.g. via `php artisan tinker` or a seeder). Password reset, email
-verification, two-factor authentication, and passkeys remain available.
+analytics dashboard, not a public multi-tenant app. Accounts are provisioned
+manually (for example, via `php artisan tinker` or a seeder). Password reset,
+email verification, two-factor authentication, and passkeys remain available.
 
 Follow-up: revisit whether any of the remaining Fortify features (2FA,
 passkeys, email verification) should be trimmed further as part of a later
 dashboard-security PRD.
 
-## Quality checks
+## Quality Checks
+
+Private app:
 
 ```bash
 composer run test     # Pint, PHPStan, and the PHPUnit suite
 npm run check          # frontend lint/format check
 npm run types:check    # TypeScript check
+```
+
+Public site:
+
+```bash
+cd site
+npm run check
+npm run build
 ```
 
 > **Windows note:** PHPStan's parallel worker can fail on some Windows PHP

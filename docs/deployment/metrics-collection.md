@@ -4,6 +4,9 @@ Production metric snapshots are collected by GitHub Actions, not by the Render
 web service. The scheduled workflow runs Artisan directly against the production
 Supabase PostgreSQL database.
 
+For the full service map, see
+[Deployment Architecture](architecture.md).
+
 ## Workflow
 
 - Workflow file: `.github/workflows/metrics-collection-scheduled.yml`
@@ -54,6 +57,28 @@ drivers, log mail, and local filesystem storage.
    `php artisan metrics:collect`.
 7. Counts `metric_snapshots` again and fails if the count did not increase.
 
+The command writes aggregate distribution snapshots first, then collects
+version/file detail snapshots for each successfully collected distribution.
+Aggregate rows in `metric_snapshots` remain the canonical dashboard total
+history. Detail rows in `distribution_versions` and
+`distribution_version_snapshots` are collected for later growth, loader,
+version, and file-level analytics.
+
+If aggregate collection fails for a distribution, detailed collection is skipped
+for that distribution and the workflow fails. If aggregate collection succeeds
+but detailed collection fails, the already-written aggregate row remains in
+place and the workflow still fails so the degraded detailed collection is
+visible in GitHub Actions.
+
+Provider caveats:
+
+- Modrinth project totals may not exactly match the sum of Modrinth version
+  downloads, so aggregate and detailed views should remain clearly labeled.
+- Modrinth loader-aware analysis depends on version records continuing to carry
+  distinct loader metadata.
+- CurseForge detail collection uses file-level records for the existing Fabric
+  and Paper/Bukkit distributions and requires a valid `CURSEFORGE_API_KEY`.
+
 ## Manual Production Run
 
 To run collection manually:
@@ -73,6 +98,8 @@ In GitHub Actions:
 - The workflow run should finish green.
 - The logs should include `Snapshot count before collection` and
   `Snapshot count after collection`.
+- The command output should include one aggregate collection line and one
+  detail collection line for each active supported distribution.
 - The after count should be greater than the before count.
 
 In the dashboard:
@@ -91,6 +118,9 @@ In the dashboard:
 - CurseForge key failure: confirm `CURSEFORGE_API_KEY` exists and is valid.
 - Provider request failure: check the provider response in the workflow logs and
   rerun only after confirming the issue is transient or fixed.
+- Detailed metric failure: inspect the `Failed to collect detailed metrics`
+  command output. The aggregate snapshot for that distribution may already have
+  been written.
 - Snapshot count did not increase: inspect `php artisan metrics:collect` output,
   provider configuration, and database write permissions before rerunning.
 
