@@ -27,8 +27,7 @@ class CollectMetrics extends Command
     public function handle(
         RecordMetricSnapshot $recordMetricSnapshot,
         RecordDistributionVersionSnapshots $recordDistributionVersionSnapshots,
-    ): int
-    {
+    ): int {
         $distributions = Distribution::query()
             ->where('active', true)
             ->whereIn('provider', self::SUPPORTED_PROVIDERS)
