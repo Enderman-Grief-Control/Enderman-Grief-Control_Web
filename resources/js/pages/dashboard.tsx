@@ -4,6 +4,7 @@ import {
     CheckCircle2,
     Download,
     ExternalLink,
+    TrendingUp,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -14,13 +15,21 @@ import {
     CardTitle,
 } from '@/components/ui/card';
 import { dashboard } from '@/routes';
-import type { DashboardAnalytics, DashboardDistribution } from '@/types';
+import type {
+    DashboardAnalytics,
+    DashboardDistribution,
+    DistributionGrowthRange,
+    TotalGrowthRange,
+} from '@/types';
 
 interface DashboardProps {
     analytics: DashboardAnalytics;
 }
 
 const numberFormatter = new Intl.NumberFormat();
+const growthFormatter = new Intl.NumberFormat(undefined, {
+    signDisplay: 'exceptZero',
+});
 const dateFormatter = new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
@@ -36,6 +45,32 @@ function formatDate(value: string | null): string {
     }
 
     return dateFormatter.format(new Date(value));
+}
+
+function formatGrowth(value: number | null): string {
+    return value === null ? '—' : growthFormatter.format(value);
+}
+
+function totalGrowthNote(
+    range: TotalGrowthRange,
+    distributionCount: number,
+): string {
+    if (range.status === 'insufficient_history') {
+        return 'Not enough history';
+    }
+
+    if (range.status === 'partial') {
+        const readyCount =
+            distributionCount - range.missingDistributionIds.length;
+
+        return `Partial: ${readyCount} of ${distributionCount} listings`;
+    }
+
+    if (range.downloads !== null && range.downloads < 0) {
+        return 'Includes a counter correction';
+    }
+
+    return 'All listings';
 }
 
 function formatLabel(value: string): string {
@@ -63,13 +98,92 @@ function StatusBadge({ status }: { status: DashboardDistribution['status'] }) {
     );
 }
 
+interface GrowthSummaryProps {
+    ranges: TotalGrowthRange[];
+    distributionCount: number;
+}
+
+function GrowthSummary({ ranges, distributionCount }: GrowthSummaryProps) {
+    return (
+        <Card className="gap-4">
+            <CardHeader className="pb-0">
+                <CardTitle className="flex items-center gap-2">
+                    <TrendingUp className="text-muted-foreground size-4" />
+                    Recent growth
+                </CardTitle>
+                <CardDescription>
+                    Download gains between stored snapshots, measured back from
+                    the latest collection.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <dl className="grid grid-cols-3 gap-3 sm:gap-4">
+                    {ranges.map((range) => (
+                        <div
+                            key={range.key}
+                            className="min-w-0 rounded-lg border px-3 py-3 sm:px-4"
+                        >
+                            <dt className="text-muted-foreground text-xs font-medium">
+                                {range.label}
+                            </dt>
+                            <dd
+                                className={
+                                    range.status === 'insufficient_history'
+                                        ? 'text-muted-foreground mt-1 text-xl font-semibold sm:text-2xl'
+                                        : 'mt-1 text-xl font-semibold sm:text-2xl'
+                                }
+                            >
+                                {formatGrowth(range.downloads)}
+                            </dd>
+                            <dd className="text-muted-foreground mt-1 text-xs">
+                                {totalGrowthNote(range, distributionCount)}
+                            </dd>
+                        </div>
+                    ))}
+                </dl>
+            </CardContent>
+        </Card>
+    );
+}
+
+function DistributionGrowth({ growth }: { growth: DistributionGrowthRange[] }) {
+    return (
+        <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+            {growth.map((range) => {
+                const isReady = range.status === 'ready';
+
+                return (
+                    <div
+                        key={range.key}
+                        className="flex items-baseline gap-1"
+                        title={isReady ? undefined : 'Not enough history yet'}
+                    >
+                        <dt className="text-muted-foreground text-xs">
+                            {range.label}
+                        </dt>
+                        <dd
+                            className={
+                                isReady
+                                    ? 'font-semibold'
+                                    : 'text-muted-foreground'
+                            }
+                        >
+                            {formatGrowth(range.downloads)}
+                        </dd>
+                    </div>
+                );
+            })}
+        </dl>
+    );
+}
+
 interface DistributionRowProps {
     distribution: DashboardDistribution;
 }
 
 function DistributionRow({ distribution }: DistributionRowProps) {
     return (
-        <div className="grid gap-4 border-t px-4 py-4 first:border-t-0 sm:grid-cols-[minmax(0,1.35fr)_minmax(7rem,0.8fr)_minmax(9rem,1fr)_auto] sm:items-center sm:px-6">
+        <div className="grid gap-4 border-t px-4 py-4 first:border-t-0 sm:px-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(6rem,0.7fr)_minmax(12rem,1.2fr)_minmax(9rem,1fr)_auto] lg:items-center">
             <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                     <h3 className="truncate text-sm font-medium">
@@ -90,6 +204,13 @@ function DistributionRow({ distribution }: DistributionRowProps) {
                 <p className="mt-1 text-sm font-semibold">
                     {formatNumber(distribution.downloads)}
                 </p>
+            </div>
+
+            <div>
+                <p className="text-muted-foreground text-xs font-medium">
+                    Growth
+                </p>
+                <DistributionGrowth growth={distribution.growth} />
             </div>
 
             <div>
@@ -196,11 +317,19 @@ export default function Dashboard({ analytics }: DashboardProps) {
                     </Card>
                 </div>
 
+                {analytics.hasSnapshots && (
+                    <GrowthSummary
+                        ranges={analytics.growth.ranges}
+                        distributionCount={analytics.distributions.length}
+                    />
+                )}
+
                 <Card className="gap-0 overflow-hidden py-0">
                     <CardHeader className="py-5">
                         <CardTitle>Distribution snapshots</CardTitle>
                         <CardDescription>
-                            Downloads and capture times for each active listing.
+                            Downloads, recent growth, and capture times for each
+                            active listing.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="px-0">
