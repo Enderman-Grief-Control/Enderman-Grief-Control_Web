@@ -252,7 +252,7 @@ class ReadDashboardAnalytics
     }
 
     /**
-     * @param  list<Distribution>  $distributions
+     * @param  array<int, Distribution>  $distributions
      * @param  array<int, list<array{
      *     key: 'day'|'week'|'month',
      *     label: string,
