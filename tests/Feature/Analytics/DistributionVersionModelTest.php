@@ -79,6 +79,31 @@ class DistributionVersionModelTest extends TestCase
         ]);
     }
 
+    public function test_distribution_versions_are_available_until_excluded(): void
+    {
+        $version = $this->createVersion();
+
+        $this->assertNull($version->refresh()->excluded_at);
+        $this->assertTrue($version->isAvailable());
+        $this->assertTrue(DistributionVersion::query()->available()->whereKey($version->id)->exists());
+        $this->assertFalse(DistributionVersion::query()->excluded()->whereKey($version->id)->exists());
+
+        $excludedAt = CarbonImmutable::parse('2026-09-21 08:00:00', 'UTC');
+        $version->update(['excluded_at' => $excludedAt]);
+        $version->snapshots()->create([
+            'downloads' => 100,
+            'captured_at' => CarbonImmutable::parse('2026-09-20 01:00:00', 'UTC'),
+        ]);
+
+        $version->refresh();
+
+        $this->assertTrue($excludedAt->equalTo($version->excluded_at));
+        $this->assertFalse($version->isAvailable());
+        $this->assertFalse(DistributionVersion::query()->available()->whereKey($version->id)->exists());
+        $this->assertTrue(DistributionVersion::query()->excluded()->whereKey($version->id)->exists());
+        $this->assertCount(1, $version->snapshots);
+    }
+
     private function createDistribution(): Distribution
     {
         return Distribution::query()->create([
