@@ -94,6 +94,14 @@ class DashboardTest extends TestCase
                         ->where('ranges.2.key', 'month')
                         ->where('ranges.2.status', 'insufficient_history')
                     )
+                    ->where('latestCollection', [
+                        'capturedAt' => '2026-09-20T10:00:00.000000Z',
+                        'windowStartedAt' => '2026-09-20T09:30:00.000000Z',
+                    ])
+                    ->where('coverage', [
+                        'distributions' => ['captured' => 1, 'available' => 1],
+                        'versions' => ['captured' => 0, 'available' => 0],
+                    ])
                     ->has('distributions', 1)
                     ->has('distributions.0', fn (Assert $row) => $row
                         ->where('id', $distribution->id)
@@ -127,6 +135,8 @@ class DashboardTest extends TestCase
                         )
                         ->where('growth.2.key', 'month')
                         ->where('growth.2.status', 'insufficient_history')
+                        ->where('versions', [])
+                        ->where('removedVersions', [])
                     )
                 )
             );
@@ -168,6 +178,11 @@ class DashboardTest extends TestCase
                         ->where('rangeStartedAt', null)
                         ->where('missingDistributionIds', [$distribution->id])
                     )
+                    ->where('latestCollection', ['capturedAt' => null, 'windowStartedAt' => null])
+                    ->where('coverage', [
+                        'distributions' => ['captured' => 0, 'available' => 1],
+                        'versions' => ['captured' => 0, 'available' => 0],
+                    ])
                     ->has('distributions', 1)
                     ->where('distributions.0.status', 'missing')
                     ->where('distributions.0.downloads', null)

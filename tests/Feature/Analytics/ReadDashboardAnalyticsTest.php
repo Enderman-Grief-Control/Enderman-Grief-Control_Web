@@ -4,6 +4,8 @@ namespace Tests\Feature\Analytics;
 
 use App\Analytics\ReadDashboardAnalytics;
 use App\Models\Distribution;
+use App\Models\DistributionVersion;
+use App\Models\DistributionVersionSnapshot;
 use App\Models\MetricSnapshot;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -195,6 +197,210 @@ class ReadDashboardAnalyticsTest extends TestCase
         $this->assertSame($fabric->id, $analytics['distributions'][1]['id']);
         $this->assertSame('missing', $analytics['distributions'][1]['status']);
         $this->assertNull($analytics['distributions'][1]['capturedAt']);
+    }
+
+    public function test_it_reports_distribution_state_and_coverage_for_the_latest_collection_window(): void
+    {
+        $modrinth = $this->createDistribution('modrinth', 'Modrinth', 'combined');
+        $fabric = $this->createDistribution('curseforge', 'CurseForge Fabric', 'fabric');
+        $paper = $this->createDistribution('curseforge', 'CurseForge Paper', 'paper');
+        $other = $this->createDistribution('other', 'Other', 'combined');
+        $inactive = $this->createDistribution('other', 'Inactive', 'paper', active: false);
+
+        $this->createSnapshot($modrinth, 100, '2026-10-06 12:00:00');
+        $this->createSnapshot($fabric, 50, '2026-10-06 11:30:00');
+        $this->createSnapshot($paper, 30, '2026-10-06 11:29:59');
+        $this->createSnapshot($inactive, 900, '2026-10-06 12:00:00');
+
+        $analytics = (new ReadDashboardAnalytics)();
+
+        $this->assertSame([
+            'capturedAt' => '2026-10-06T12:00:00.000000Z',
+            'windowStartedAt' => '2026-10-06T11:30:00.000000Z',
+        ], $analytics['latestCollection']);
+        $this->assertSame(
+            [$modrinth->id, $fabric->id, $paper->id, $other->id],
+            array_column($analytics['distributions'], 'id'),
+        );
+        $this->assertSame(['current', 'current', 'stale', 'missing'], array_column($analytics['distributions'], 'status'));
+        $this->assertSame(['captured' => 2, 'available' => 4], $analytics['coverage']['distributions']);
+        $this->assertSame(180, $analytics['totalDownloads']);
+        $this->assertSame(30, $analytics['distributions'][2]['downloads']);
+    }
+
+    public function test_it_reads_version_rows_with_latest_downloads_status_and_default_order(): void
+    {
+        $distribution = $this->createDistribution('modrinth', 'Modrinth', 'combined');
+        $older = $this->createVersion($distribution, 'v1', '2026-09-01 00:00:00');
+        $unpublished = $this->createVersion($distribution, 'v-null', null);
+        $newer = $this->createVersion($distribution, 'v2', '2026-10-01 00:00:00');
+        $sameDate = $this->createVersion($distribution, 'v2b', '2026-10-01 00:00:00');
+
+        $this->createSnapshot($distribution, 500, '2026-10-06 12:00:00');
+        $this->createVersionSnapshot($older, 40, '2026-10-05 12:00:00');
+        $this->createVersionSnapshot($older, 45, '2026-10-06 12:00:00');
+        $this->createVersionSnapshot($older, 47, '2026-10-06 12:00:00');
+        $this->createVersionSnapshot($newer, 10, '2026-10-06 11:30:00');
+        $this->createVersionSnapshot($sameDate, 7, '2026-10-05 18:00:00');
+
+        $analytics = (new ReadDashboardAnalytics)();
+        $versions = $analytics['distributions'][0]['versions'];
+
+        $this->assertSame([$sameDate->id, $newer->id, $older->id, $unpublished->id], array_column($versions, 'id'));
+        $this->assertSame(['missing', 'current', 'current', 'missing'], array_column($versions, 'status'));
+        $this->assertSame([7, 10, 47, null], array_column($versions, 'downloads'));
+        $this->assertSame('2026-10-06T12:00:00.000000Z', $versions[2]['capturedAt']);
+        $this->assertNull($versions[3]['capturedAt']);
+        $this->assertSame('v1', $versions[2]['displayName']);
+        $this->assertSame('1.0.0-v1', $versions[2]['versionNumber']);
+        $this->assertSame(['fabric', 'paper'], $versions[2]['loaders']);
+        $this->assertSame(['1.21.1'], $versions[2]['gameVersions']);
+        $this->assertSame('2026-09-01T00:00:00.000000Z', $versions[2]['publishedAt']);
+        $this->assertSame(['captured' => 2, 'available' => 4], $analytics['coverage']['versions']);
+        $this->assertSame([], $analytics['distributions'][0]['removedVersions']);
+    }
+
+    public function test_it_calculates_version_growth_with_aggregate_growth_rules(): void
+    {
+        $distribution = $this->createDistribution('modrinth', 'Modrinth', 'combined');
+        $established = $this->createVersion($distribution, 'established', '2026-08-01 00:00:00');
+        $recent = $this->createVersion($distribution, 'recent', '2026-10-02 00:00:00');
+        $corrected = $this->createVersion($distribution, 'corrected', '2026-07-01 00:00:00');
+        $stopped = $this->createVersion($distribution, 'stopped', '2026-06-01 00:00:00');
+
+        $this->createSnapshot($distribution, 5000, '2026-10-06 12:00:00');
+
+        $this->createVersionSnapshot($established, 100, '2026-09-01 12:00:00');
+        $this->createVersionSnapshot($established, 300, '2026-09-29 12:00:00');
+        $this->createVersionSnapshot($established, 380, '2026-10-05 12:00:00');
+        $this->createVersionSnapshot($established, 390, '2026-10-05 12:00:00');
+        $this->createVersionSnapshot($established, 395, '2026-10-05 13:00:00');
+        $this->createVersionSnapshot($established, 400, '2026-10-06 12:00:00');
+
+        $this->createVersionSnapshot($recent, 20, '2026-10-02 12:00:00');
+        $this->createVersionSnapshot($recent, 60, '2026-10-06 12:00:00');
+
+        $this->createVersionSnapshot($corrected, 120, '2026-10-05 12:00:00');
+        $this->createVersionSnapshot($corrected, 100, '2026-10-06 12:00:00');
+
+        $this->createVersionSnapshot($stopped, 70, '2026-10-04 12:00:00');
+
+        $analytics = (new ReadDashboardAnalytics)();
+        $versions = collect($analytics['distributions'][0]['versions'])->keyBy('id');
+
+        $establishedGrowth = $versions[$established->id]['growth'];
+        $this->assertSame(['day', 'week', 'month'], array_column($establishedGrowth, 'key'));
+        $this->assertSame([10, 100, 300], array_column($establishedGrowth, 'downloads'));
+        $this->assertSame(['ready', 'ready', 'ready'], array_column($establishedGrowth, 'status'));
+        $this->assertSame('2026-10-05T12:00:00.000000Z', $establishedGrowth[0]['baselineAt']);
+        $this->assertSame('2026-10-06T12:00:00.000000Z', $establishedGrowth[0]['capturedAt']);
+
+        $recentGrowth = $versions[$recent->id]['growth'];
+        $this->assertSame([40, null, null], array_column($recentGrowth, 'downloads'));
+        $this->assertSame(['ready', 'insufficient_history', 'insufficient_history'], array_column($recentGrowth, 'status'));
+        $this->assertNull($recentGrowth[1]['baselineAt']);
+        $this->assertSame('2026-10-06T12:00:00.000000Z', $recentGrowth[1]['capturedAt']);
+
+        $this->assertSame(-20, $versions[$corrected->id]['growth'][0]['downloads']);
+        $this->assertSame('ready', $versions[$corrected->id]['growth'][0]['status']);
+
+        $this->assertSame('missing', $versions[$stopped->id]['status']);
+        $this->assertSame([0, null, null], array_column($versions[$stopped->id]['growth'], 'downloads'));
+        $this->assertSame('ready', $versions[$stopped->id]['growth'][0]['status']);
+    }
+
+    public function test_version_coverage_excludes_removed_versions_and_inactive_distributions(): void
+    {
+        $modrinth = $this->createDistribution('modrinth', 'Modrinth', 'combined');
+        $fabric = $this->createDistribution('curseforge', 'CurseForge Fabric', 'fabric');
+        $inactive = $this->createDistribution('curseforge', 'Inactive', 'paper', active: false);
+
+        $current = $this->createVersion($modrinth, 'current', '2026-10-01 00:00:00');
+        $missing = $this->createVersion($modrinth, 'missing', '2026-09-01 00:00:00');
+        $removedEarlier = $this->createVersion($modrinth, 'removed-earlier', '2026-08-01 00:00:00', excludedAt: '2026-10-03 00:00:00');
+        $removedLater = $this->createVersion($modrinth, 'removed-later', '2026-07-01 00:00:00', excludedAt: '2026-10-04 00:00:00');
+        $staleVersion = $this->createVersion($fabric, 'stale', '2026-09-15 00:00:00');
+        $inactiveVersion = $this->createVersion($inactive, 'inactive', '2026-10-01 00:00:00');
+
+        $this->createSnapshot($modrinth, 500, '2026-10-06 12:00:00');
+        $this->createSnapshot($fabric, 200, '2026-10-05 12:00:00');
+        $this->createSnapshot($inactive, 50, '2026-10-06 12:00:00');
+        $this->createVersionSnapshot($current, 10, '2026-10-06 12:00:00');
+        $this->createVersionSnapshot($missing, 20, '2026-10-05 12:00:00');
+        $this->createVersionSnapshot($removedEarlier, 30, '2026-10-02 12:00:00');
+        $this->createVersionSnapshot($staleVersion, 40, '2026-10-05 12:00:00');
+        $this->createVersionSnapshot($inactiveVersion, 50, '2026-10-06 12:00:00');
+
+        $analytics = (new ReadDashboardAnalytics)();
+        [$modrinthRow, $fabricRow] = $analytics['distributions'];
+
+        $this->assertSame([$current->id, $missing->id], array_column($modrinthRow['versions'], 'id'));
+        $this->assertSame(['current', 'missing'], array_column($modrinthRow['versions'], 'status'));
+        $this->assertSame('stale', $fabricRow['status']);
+        $this->assertSame(['missing'], array_column($fabricRow['versions'], 'status'));
+        $this->assertSame(['captured' => 1, 'available' => 3], $analytics['coverage']['versions']);
+
+        $this->assertSame([$removedLater->id, $removedEarlier->id], array_column($modrinthRow['removedVersions'], 'id'));
+        $this->assertSame([
+            'id' => $removedEarlier->id,
+            'displayName' => 'removed-earlier',
+            'versionNumber' => '1.0.0-removed-earlier',
+            'loaders' => ['fabric', 'paper'],
+            'gameVersions' => ['1.21.1'],
+            'publishedAt' => '2026-08-01T00:00:00.000000Z',
+            'downloads' => 30,
+            'capturedAt' => '2026-10-02T12:00:00.000000Z',
+            'excludedAt' => '2026-10-03T00:00:00.000000Z',
+        ], $modrinthRow['removedVersions'][1]);
+        $this->assertNull($modrinthRow['removedVersions'][0]['downloads']);
+        $this->assertSame([], $fabricRow['removedVersions']);
+    }
+
+    public function test_versions_are_missing_when_no_collection_exists(): void
+    {
+        $distribution = $this->createDistribution('modrinth', 'Modrinth', 'combined');
+        $this->createVersion($distribution, 'v1', '2026-10-01 00:00:00');
+
+        $analytics = (new ReadDashboardAnalytics)();
+        $version = $analytics['distributions'][0]['versions'][0];
+
+        $this->assertSame(['capturedAt' => null, 'windowStartedAt' => null], $analytics['latestCollection']);
+        $this->assertSame('missing', $version['status']);
+        $this->assertSame(
+            ['insufficient_history', 'insufficient_history', 'insufficient_history'],
+            array_column($version['growth'], 'status'),
+        );
+        $this->assertSame(['captured' => 0, 'available' => 1], $analytics['coverage']['versions']);
+    }
+
+    private function createVersion(
+        Distribution $distribution,
+        string $name,
+        ?string $publishedAt,
+        ?string $excludedAt = null,
+    ): DistributionVersion {
+        return DistributionVersion::query()->create([
+            'distribution_id' => $distribution->id,
+            'provider_version_identifier' => "{$distribution->id}-{$name}",
+            'version_number' => "1.0.0-{$name}",
+            'display_name' => $name,
+            'loaders' => ['fabric', 'paper'],
+            'game_versions' => ['1.21.1'],
+            'published_at' => $publishedAt === null ? null : CarbonImmutable::parse($publishedAt, 'UTC'),
+            'excluded_at' => $excludedAt === null ? null : CarbonImmutable::parse($excludedAt, 'UTC'),
+        ]);
+    }
+
+    private function createVersionSnapshot(
+        DistributionVersion $version,
+        int $downloads,
+        string $capturedAt,
+    ): DistributionVersionSnapshot {
+        return DistributionVersionSnapshot::query()->create([
+            'distribution_version_id' => $version->id,
+            'downloads' => $downloads,
+            'captured_at' => CarbonImmutable::parse($capturedAt, 'UTC'),
+        ]);
     }
 
     private function createDistribution(
