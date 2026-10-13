@@ -1,4 +1,6 @@
-export type DashboardDistributionStatus = 'current' | 'missing';
+export type DashboardDistributionStatus = 'current' | 'stale' | 'missing';
+
+export type DashboardVersionStatus = 'current' | 'missing';
 
 export type GrowthRangeKey = 'day' | 'week' | 'month';
 
@@ -45,6 +47,48 @@ export interface DashboardDistribution {
     capturedAt: string | null;
     status: DashboardDistributionStatus;
     growth: DistributionGrowthRange[];
+    versions: DashboardVersion[];
+    removedVersions: DashboardRemovedVersion[];
+}
+
+export interface DashboardVersion {
+    id: number;
+    displayName: string;
+    versionNumber: string | null;
+    loaders: string[];
+    gameVersions: string[];
+    publishedAt: string | null;
+    downloads: number | null;
+    capturedAt: string | null;
+    status: DashboardVersionStatus;
+    growth: DistributionGrowthRange[];
+}
+
+export interface DashboardRemovedVersion {
+    id: number;
+    displayName: string;
+    versionNumber: string | null;
+    loaders: string[];
+    gameVersions: string[];
+    publishedAt: string | null;
+    downloads: number | null;
+    capturedAt: string | null;
+    excludedAt: string;
+}
+
+export interface DashboardLatestCollection {
+    capturedAt: string | null;
+    windowStartedAt: string | null;
+}
+
+export interface DashboardCoverageCount {
+    captured: number;
+    available: number;
+}
+
+export interface DashboardCoverage {
+    distributions: DashboardCoverageCount;
+    versions: DashboardCoverageCount;
 }
 
 export interface DashboardAnalytics {
@@ -53,5 +97,7 @@ export interface DashboardAnalytics {
     hasSnapshots: boolean;
     hasMissingSnapshots: boolean;
     growth: DashboardGrowth;
+    latestCollection: DashboardLatestCollection;
+    coverage: DashboardCoverage;
     distributions: DashboardDistribution[];
 }

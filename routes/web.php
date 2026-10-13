@@ -1,6 +1,7 @@
 <?php
 
 use App\Analytics\ReadDashboardAnalytics;
+use App\Http\Controllers\DistributionVersionExclusionController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -14,6 +15,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ['analytics' => $analytics()]
         )
     )->name('dashboard');
+
+    Route::post('dashboard/versions/{distributionVersion}/exclusion', [DistributionVersionExclusionController::class, 'store'])
+        ->name('dashboard.versions.exclusion.store');
+    Route::delete('dashboard/versions/{distributionVersion}/exclusion', [DistributionVersionExclusionController::class, 'destroy'])
+        ->name('dashboard.versions.exclusion.destroy');
 });
 
 require __DIR__.'/settings.php';

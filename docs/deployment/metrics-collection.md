@@ -61,8 +61,13 @@ The command writes aggregate distribution snapshots first, then collects
 version/file detail snapshots for each successfully collected distribution.
 Aggregate rows in `metric_snapshots` remain the canonical dashboard total
 history. Detail rows in `distribution_versions` and
-`distribution_version_snapshots` are collected for later growth, loader,
-version, and file-level analytics.
+`distribution_version_snapshots` feed the dashboard's expandable version/file
+rows and their growth.
+
+Recording a version/file snapshot also clears that version/file's
+`excluded_at` flag. A version/file the maintainer removed from the dashboard
+is restored automatically when it reappears in collection. Collection never
+deletes version/file rows or snapshot history.
 
 If aggregate collection fails for a distribution, detailed collection is skipped
 for that distribution and the workflow fails. If aggregate collection succeeds
@@ -78,6 +83,11 @@ Provider caveats:
   distinct loader metadata.
 - CurseForge detail collection uses file-level records for the existing Fabric
   and Paper/Bukkit distributions and requires a valid `CURSEFORGE_API_KEY`.
+- CurseForge per-file `downloadCount` values from the API can stay frozen
+  while project totals keep rising, so they can lag well behind the
+  CurseForge website's Files tab. Every official files endpoint returns the
+  same values. CurseForge version/file growth may read 0 for long stretches.
+  CurseForge project totals and aggregate growth are unaffected.
 
 ## Manual Production Run
 
@@ -108,6 +118,12 @@ In the dashboard:
 - Confirm the latest metric snapshot time reflects the most recent successful
   scheduled or manual collection run.
 - Confirm Modrinth and CurseForge distribution totals render as expected.
+- Check the Distribution coverage and Version/file coverage cards. Both count
+  what was captured in the latest collection: snapshots within 30 minutes
+  before the newest aggregate capture across active distributions. A
+  distribution outside that window shows as Stale. A version/file outside it
+  shows as Missing and can be removed from the list and coverage, then
+  restored from the distribution's removed view.
 
 ## Common Failures And First Checks
 

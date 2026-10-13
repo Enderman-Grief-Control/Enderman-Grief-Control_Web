@@ -7,13 +7,21 @@ use App\Models\MetricSnapshot;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 
+/**
+ * @phpstan-import-type DashboardVersion from ReadDistributionVersionAnalytics
+ * @phpstan-import-type DashboardRemovedVersion from ReadDistributionVersionAnalytics
+ */
 class ReadDashboardAnalytics
 {
-    private const GROWTH_RANGES = [
+    public const GROWTH_RANGES = [
         ['key' => 'day', 'label' => '24h', 'hours' => 24],
         ['key' => 'week', 'label' => '7d', 'hours' => 168],
         ['key' => 'month', 'label' => '30d', 'hours' => 720],
     ];
+
+    public function __construct(
+        private readonly ReadDistributionVersionAnalytics $versionAnalytics = new ReadDistributionVersionAnalytics,
+    ) {}
 
     /**
      * @return array{
@@ -33,6 +41,11 @@ class ReadDashboardAnalytics
      *             missingDistributionIds: list<int>
      *         }>
      *     },
+     *     latestCollection: array{capturedAt: string|null, windowStartedAt: string|null},
+     *     coverage: array{
+     *         distributions: array{captured: int, available: int},
+     *         versions: array{captured: int, available: int}
+     *     },
      *     distributions: list<array{
      *         id: int,
      *         provider: string,
@@ -43,7 +56,7 @@ class ReadDashboardAnalytics
      *         followers: int|null,
      *         likes: int|null,
      *         capturedAt: string|null,
-     *         status: 'current'|'missing',
+     *         status: 'current'|'stale'|'missing',
      *         growth: list<array{
      *             key: 'day'|'week'|'month',
      *             label: string,
@@ -52,7 +65,9 @@ class ReadDashboardAnalytics
      *             status: 'ready'|'insufficient_history',
      *             capturedAt: string|null,
      *             baselineAt: string|null
-     *         }>
+     *         }>,
+     *         versions: list<DashboardVersion>,
+     *         removedVersions: list<DashboardRemovedVersion>
      *     }>
      * }
      */
@@ -73,7 +88,6 @@ class ReadDashboardAnalytics
         $lastUpdatedAt = null;
         $hasSnapshots = false;
         $hasMissingSnapshots = false;
-        $dashboardDistributions = [];
         $latestSnapshots = [];
 
         foreach ($distributions as $distribution) {
@@ -88,26 +102,34 @@ class ReadDashboardAnalytics
                 $totalDownloads += $snapshot->downloads;
                 $lastUpdatedAt = $this->newerTimestamp($lastUpdatedAt, $snapshot->captured_at);
             }
-
-            $dashboardDistributions[] = $this->serializeDistribution($distribution, $snapshot);
         }
 
         $anchorAt = $lastUpdatedAt;
+        $latestCollection = new LatestCollection($anchorAt);
+        $versionAnalytics = ($this->versionAnalytics)(
+            array_values($distributions->map(fn (Distribution $distribution): int => $distribution->id)->all()),
+            $latestCollection,
+        );
         $distributionGrowth = [];
+        $dashboardDistributions = [];
+        $capturedDistributions = 0;
 
         foreach ($distributions as $distribution) {
-            $distributionGrowth[$distribution->id] = $this->distributionGrowth(
-                $distribution,
-                $latestSnapshots[$distribution->id],
-                $anchorAt,
-            );
-        }
+            $snapshot = $latestSnapshots[$distribution->id];
+            $distributionGrowth[$distribution->id] = $this->distributionGrowth($distribution, $snapshot, $anchorAt);
+            $dashboardDistribution = $this->serializeDistribution($distribution, $snapshot, $latestCollection);
 
-        foreach ($dashboardDistributions as &$dashboardDistribution) {
-            $dashboardDistribution['growth'] = $distributionGrowth[$dashboardDistribution['id']];
-        }
+            if ($dashboardDistribution['status'] === 'current') {
+                $capturedDistributions++;
+            }
 
-        unset($dashboardDistribution);
+            $dashboardDistributions[] = [
+                ...$dashboardDistribution,
+                'growth' => $distributionGrowth[$distribution->id],
+                'versions' => $versionAnalytics['versions'][$distribution->id],
+                'removedVersions' => $versionAnalytics['removedVersions'][$distribution->id],
+            ];
+        }
 
         return [
             'totalDownloads' => $totalDownloads,
@@ -116,6 +138,14 @@ class ReadDashboardAnalytics
             'hasMissingSnapshots' => $hasMissingSnapshots,
             'growth' => [
                 'ranges' => $this->totalGrowth($distributions->all(), $distributionGrowth, $anchorAt),
+            ],
+            'latestCollection' => $latestCollection->toArray(),
+            'coverage' => [
+                'distributions' => [
+                    'captured' => $capturedDistributions,
+                    'available' => $distributions->count(),
+                ],
+                'versions' => $versionAnalytics['coverage'],
             ],
             'distributions' => $dashboardDistributions,
         ];
@@ -151,11 +181,14 @@ class ReadDashboardAnalytics
      *     followers: int|null,
      *     likes: int|null,
      *     capturedAt: string|null,
-     *     status: 'current'|'missing'
+     *     status: 'current'|'stale'|'missing'
      * }
      */
-    private function serializeDistribution(Distribution $distribution, ?MetricSnapshot $snapshot): array
-    {
+    private function serializeDistribution(
+        Distribution $distribution,
+        ?MetricSnapshot $snapshot,
+        LatestCollection $latestCollection,
+    ): array {
         return [
             'id' => $distribution->id,
             'provider' => $distribution->provider,
@@ -166,7 +199,11 @@ class ReadDashboardAnalytics
             'followers' => $snapshot?->followers,
             'likes' => $snapshot?->likes,
             'capturedAt' => $snapshot?->captured_at->toJSON(),
-            'status' => $snapshot === null ? 'missing' : 'current',
+            'status' => match (true) {
+                $snapshot === null => 'missing',
+                $latestCollection->contains($snapshot->captured_at) => 'current',
+                default => 'stale',
+            },
         ];
     }
 

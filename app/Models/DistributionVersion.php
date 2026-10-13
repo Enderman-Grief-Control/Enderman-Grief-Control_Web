@@ -3,6 +3,8 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -19,6 +21,7 @@ use Illuminate\Support\Carbon;
  * @property array<int, string> $game_versions
  * @property Carbon|null $published_at
  * @property array<string, mixed>|null $metadata
+ * @property Carbon|null $excluded_at
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Distribution $distribution
@@ -33,6 +36,7 @@ use Illuminate\Support\Carbon;
     'game_versions',
     'published_at',
     'metadata',
+    'excluded_at',
 ])]
 class DistributionVersion extends Model
 {
@@ -53,6 +57,33 @@ class DistributionVersion extends Model
     }
 
     /**
+     * Versions/files the maintainer has not removed from the dashboard.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function available(Builder $query): void
+    {
+        $query->whereNull('excluded_at');
+    }
+
+    /**
+     * Versions/files the maintainer has removed from the dashboard.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function excluded(Builder $query): void
+    {
+        $query->whereNotNull('excluded_at');
+    }
+
+    public function isAvailable(): bool
+    {
+        return $this->excluded_at === null;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -64,6 +95,7 @@ class DistributionVersion extends Model
             'game_versions' => 'array',
             'metadata' => 'array',
             'published_at' => 'datetime',
+            'excluded_at' => 'datetime',
         ];
     }
 }
