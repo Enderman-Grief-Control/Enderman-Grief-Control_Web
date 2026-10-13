@@ -2,6 +2,7 @@
 
 namespace App\Analytics;
 
+use App\Models\MetricSnapshot;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 
@@ -24,6 +25,19 @@ final readonly class LatestCollection
     {
         $this->capturedAt = $capturedAt === null ? null : CarbonImmutable::instance($capturedAt);
         $this->windowStartedAt = $this->capturedAt?->subMinutes(self::WINDOW_MINUTES);
+    }
+
+    /**
+     * Resolve the latest collection from stored aggregate snapshots, using the
+     * same anchor as ReadDashboardAnalytics.
+     */
+    public static function current(): self
+    {
+        $capturedAt = MetricSnapshot::query()
+            ->whereHas('distribution', fn ($query) => $query->where('active', true))
+            ->max('captured_at');
+
+        return new self(is_string($capturedAt) ? CarbonImmutable::parse($capturedAt) : null);
     }
 
     public function contains(?CarbonInterface $capturedAt): bool

@@ -3,6 +3,8 @@
 namespace Tests\Feature;
 
 use App\Models\Distribution;
+use App\Models\DistributionVersion;
+use App\Models\DistributionVersionSnapshot;
 use App\Models\MetricSnapshot;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -138,6 +140,121 @@ class DashboardTest extends TestCase
                         ->where('versions', [])
                         ->where('removedVersions', [])
                     )
+                )
+            );
+    }
+
+    public function test_authenticated_dashboard_includes_version_rows_and_removed_versions(): void
+    {
+        $user = User::factory()->create();
+        $anchorAt = CarbonImmutable::parse('2026-10-08 13:37:00', 'UTC');
+
+        $distribution = Distribution::query()->create([
+            'provider' => 'modrinth',
+            'name' => 'Modrinth',
+            'loader' => 'combined',
+            'project_identifier' => 'modrinth-combined',
+            'listing_url' => 'https://modrinth.com/plugin/enderman-grief-control',
+            'active' => true,
+        ]);
+
+        MetricSnapshot::query()->create([
+            'distribution_id' => $distribution->id,
+            'downloads' => 500,
+            'captured_at' => $anchorAt,
+        ]);
+
+        $current = DistributionVersion::query()->create([
+            'distribution_id' => $distribution->id,
+            'provider_version_identifier' => 'current-version',
+            'version_number' => '1.1.0',
+            'display_name' => 'Enderman Grief Control 1.1.0',
+            'loaders' => ['paper', 'fabric'],
+            'game_versions' => ['1.21.8'],
+            'published_at' => CarbonImmutable::parse('2026-10-01 12:00:00', 'UTC'),
+        ]);
+        $missing = DistributionVersion::query()->create([
+            'distribution_id' => $distribution->id,
+            'provider_version_identifier' => 'missing-version',
+            'version_number' => '1.0.0',
+            'display_name' => 'Enderman Grief Control 1.0.0',
+            'loaders' => ['paper'],
+            'game_versions' => ['1.21.7'],
+            'published_at' => CarbonImmutable::parse('2026-09-01 12:00:00', 'UTC'),
+        ]);
+        $removed = DistributionVersion::query()->create([
+            'distribution_id' => $distribution->id,
+            'provider_version_identifier' => 'removed-version',
+            'version_number' => '0.9.0',
+            'display_name' => 'Enderman Grief Control 0.9.0',
+            'loaders' => ['paper'],
+            'game_versions' => ['1.21.6'],
+            'published_at' => CarbonImmutable::parse('2026-08-01 12:00:00', 'UTC'),
+            'excluded_at' => CarbonImmutable::parse('2026-10-08 14:00:00', 'UTC'),
+        ]);
+
+        foreach ([
+            [$current, 80, $anchorAt->subDay()],
+            [$current, 120, $anchorAt],
+            [$missing, 40, $anchorAt->subHours(8)],
+            [$removed, 10, $anchorAt->subDays(2)],
+        ] as [$version, $downloads, $capturedAt]) {
+            DistributionVersionSnapshot::query()->create([
+                'distribution_version_id' => $version->id,
+                'downloads' => $downloads,
+                'captured_at' => $capturedAt,
+            ]);
+        }
+
+        $this->actingAs($user);
+
+        $response = $this->get(route('dashboard'));
+        $response
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('dashboard')
+                ->where('analytics.coverage', [
+                    'distributions' => ['captured' => 1, 'available' => 1],
+                    'versions' => ['captured' => 1, 'available' => 2],
+                ])
+                ->has('analytics.distributions.0.versions', 2)
+                ->has('analytics.distributions.0.versions.0', fn (Assert $row) => $row
+                    ->where('id', $current->id)
+                    ->where('displayName', 'Enderman Grief Control 1.1.0')
+                    ->where('versionNumber', '1.1.0')
+                    ->where('loaders', ['paper', 'fabric'])
+                    ->where('gameVersions', ['1.21.8'])
+                    ->where('publishedAt', '2026-10-01T12:00:00.000000Z')
+                    ->where('downloads', 120)
+                    ->where('capturedAt', '2026-10-08T13:37:00.000000Z')
+                    ->where('status', 'current')
+                    ->has('growth', 3)
+                    ->has('growth.0', fn (Assert $range) => $range
+                        ->where('key', 'day')
+                        ->where('label', '24h')
+                        ->where('hours', 24)
+                        ->where('downloads', 40)
+                        ->where('status', 'ready')
+                        ->where('capturedAt', '2026-10-08T13:37:00.000000Z')
+                        ->where('baselineAt', '2026-10-07T13:37:00.000000Z')
+                    )
+                    ->where('growth.1.status', 'insufficient_history')
+                    ->where('growth.2.status', 'insufficient_history')
+                )
+                ->where('analytics.distributions.0.versions.1.id', $missing->id)
+                ->where('analytics.distributions.0.versions.1.status', 'missing')
+                ->where('analytics.distributions.0.versions.1.downloads', 40)
+                ->has('analytics.distributions.0.removedVersions', 1)
+                ->has('analytics.distributions.0.removedVersions.0', fn (Assert $row) => $row
+                    ->where('id', $removed->id)
+                    ->where('displayName', 'Enderman Grief Control 0.9.0')
+                    ->where('versionNumber', '0.9.0')
+                    ->where('loaders', ['paper'])
+                    ->where('gameVersions', ['1.21.6'])
+                    ->where('publishedAt', '2026-08-01T12:00:00.000000Z')
+                    ->where('downloads', 10)
+                    ->where('capturedAt', '2026-10-06T13:37:00.000000Z')
+                    ->where('excludedAt', '2026-10-08T14:00:00.000000Z')
                 )
             );
     }
