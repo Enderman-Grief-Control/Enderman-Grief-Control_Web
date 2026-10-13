@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Form, Head } from '@inertiajs/react';
 import {
     AlertCircle,
     CheckCircle2,
@@ -6,9 +6,14 @@ import {
     Clock,
     Download,
     ExternalLink,
+    EyeOff,
+    RotateCcw,
     TrendingUp,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import type { ReactNode } from 'react';
+import DistributionVersionExclusionController from '@/actions/App/Http/Controllers/DistributionVersionExclusionController';
+import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,11 +28,21 @@ import {
     CollapsibleContent,
     CollapsibleTrigger,
 } from '@/components/ui/collapsible';
+import {
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { dashboard } from '@/routes';
 import type {
     DashboardAnalytics,
     DashboardCoverageCount,
     DashboardDistribution,
+    DashboardRemovedVersion,
     DashboardVersion,
     DistributionGrowthRange,
     TotalGrowthRange,
@@ -296,7 +311,13 @@ function MetricColumns({ downloads, growth, capturedAt }: MetricColumnsProps) {
     );
 }
 
-function versionDetails(version: DashboardVersion): string {
+// Keep the expanded panel open and the scroll position after an action;
+// the redirect back still reloads coverage and the version/file lists.
+const exclusionFormOptions = { preserveState: true, preserveScroll: true };
+
+function versionDetails(
+    version: DashboardVersion | DashboardRemovedVersion,
+): string {
     const details = [];
 
     if (
@@ -317,27 +338,97 @@ function versionDetails(version: DashboardVersion): string {
     return details.join(' · ');
 }
 
-function VersionRow({ version }: { version: DashboardVersion }) {
+function VersionName({
+    version,
+    badge,
+}: {
+    version: DashboardVersion | DashboardRemovedVersion;
+    badge: ReactNode;
+}) {
     const details = versionDetails(version);
 
     return (
-        <li className={`${rowGridClassName} border-t first:border-t-0`}>
-            <div className="min-w-0 pl-9">
-                <div className="flex flex-wrap items-center gap-2">
-                    <h4 className="truncate text-sm font-medium">
-                        {version.displayName}
-                    </h4>
-                    <VersionStatusBadge status={version.status} />
-                </div>
-                {details !== '' && (
-                    <p
-                        className="text-muted-foreground mt-1 text-xs"
-                        title={version.gameVersions.join(', ')}
-                    >
-                        {details}
-                    </p>
-                )}
+        <div className="min-w-0 pl-9">
+            <div className="flex flex-wrap items-center gap-2">
+                <h4 className="truncate text-sm font-medium">
+                    {version.displayName}
+                </h4>
+                {badge}
             </div>
+            {details !== '' && (
+                <p
+                    className="text-muted-foreground mt-1 text-xs"
+                    title={version.gameVersions.join(', ')}
+                >
+                    {details}
+                </p>
+            )}
+        </div>
+    );
+}
+
+function RemoveVersionDialog({ version }: { version: DashboardVersion }) {
+    const [open, setOpen] = useState(false);
+
+    return (
+        <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+                <Button
+                    variant="outline"
+                    size="icon"
+                    className="text-muted-foreground size-9"
+                    aria-label={`Remove ${version.displayName}`}
+                    title="Remove"
+                >
+                    <EyeOff className="size-4" />
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogTitle>Remove {version.displayName}?</DialogTitle>
+                <DialogDescription>
+                    This version/file was not captured in the latest collection.
+                    Removing it hides it from the list and from version/file
+                    coverage. Its snapshot history is kept, and it comes back
+                    automatically if a later collection finds it. You can also
+                    restore it from the removed list.
+                </DialogDescription>
+
+                <Form
+                    {...DistributionVersionExclusionController.store.form(
+                        version.id,
+                    )}
+                    options={exclusionFormOptions}
+                    onSuccess={() => setOpen(false)}
+                    className="space-y-4"
+                >
+                    {({ processing, errors }) => (
+                        <>
+                            <InputError message={errors.version} />
+
+                            <DialogFooter className="gap-2">
+                                <DialogClose asChild>
+                                    <Button variant="secondary">Cancel</Button>
+                                </DialogClose>
+
+                                <Button type="submit" disabled={processing}>
+                                    Remove version/file
+                                </Button>
+                            </DialogFooter>
+                        </>
+                    )}
+                </Form>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function VersionRow({ version }: { version: DashboardVersion }) {
+    return (
+        <li className={`${rowGridClassName} border-t first:border-t-0`}>
+            <VersionName
+                version={version}
+                badge={<VersionStatusBadge status={version.status} />}
+            />
 
             <MetricColumns
                 downloads={version.downloads}
@@ -345,8 +436,119 @@ function VersionRow({ version }: { version: DashboardVersion }) {
                 capturedAt={version.capturedAt}
             />
 
-            <div aria-hidden="true" className="hidden lg:block" />
+            {version.status === 'missing' ? (
+                <RemoveVersionDialog version={version} />
+            ) : (
+                <div aria-hidden="true" className="hidden lg:block" />
+            )}
         </li>
+    );
+}
+
+function RemovedVersionRow({ version }: { version: DashboardRemovedVersion }) {
+    return (
+        <li className={`${rowGridClassName} border-t`}>
+            <VersionName
+                version={version}
+                badge={
+                    <Badge
+                        variant="outline"
+                        className="text-muted-foreground gap-1.5"
+                    >
+                        <EyeOff className="size-3.5" />
+                        Removed
+                    </Badge>
+                }
+            />
+
+            <div>
+                <p className="text-muted-foreground text-xs font-medium">
+                    Downloads
+                </p>
+                <p className="text-muted-foreground mt-1 text-sm">
+                    {formatNumber(version.downloads)}
+                </p>
+            </div>
+
+            <div>
+                <p className="text-muted-foreground text-xs font-medium">
+                    Removed
+                </p>
+                <p className="mt-1 text-sm">{formatDate(version.excludedAt)}</p>
+            </div>
+
+            <div>
+                <p className="text-muted-foreground text-xs font-medium">
+                    Last captured
+                </p>
+                <p className="mt-1 text-sm">{formatDate(version.capturedAt)}</p>
+            </div>
+
+            <Form
+                {...DistributionVersionExclusionController.destroy.form(
+                    version.id,
+                )}
+                options={exclusionFormOptions}
+            >
+                {({ processing }) => (
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        size="icon"
+                        className="text-muted-foreground size-9"
+                        disabled={processing}
+                        aria-label={`Restore ${version.displayName}`}
+                        title="Restore"
+                    >
+                        <RotateCcw className="size-4" />
+                    </Button>
+                )}
+            </Form>
+        </li>
+    );
+}
+
+function RemovedVersions({
+    distribution,
+}: {
+    distribution: DashboardDistribution;
+}) {
+    const [showRemoved, setShowRemoved] = useState(false);
+    const listId = useId();
+    const removedCount = distribution.removedVersions.length;
+
+    if (removedCount === 0) {
+        return null;
+    }
+
+    return (
+        <div className="border-t">
+            <div className="px-4 py-2 pl-13 sm:px-6 sm:pl-15">
+                <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground -ml-3"
+                    aria-expanded={showRemoved}
+                    aria-controls={listId}
+                    onClick={() => setShowRemoved((value) => !value)}
+                >
+                    {showRemoved
+                        ? `Hide removed (${removedCount})`
+                        : `Show removed (${removedCount})`}
+                </Button>
+            </div>
+
+            {showRemoved && (
+                <ul
+                    id={listId}
+                    aria-label={`${distribution.name} removed versions/files`}
+                >
+                    {distribution.removedVersions.map((version) => (
+                        <RemovedVersionRow key={version.id} version={version} />
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 }
 
@@ -424,6 +626,8 @@ function DistributionRow({ distribution }: DistributionRowProps) {
                         ))}
                     </ul>
                 )}
+
+                <RemovedVersions distribution={distribution} />
             </CollapsibleContent>
         </Collapsible>
     );
