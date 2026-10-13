@@ -2,11 +2,15 @@ import { Head } from '@inertiajs/react';
 import {
     AlertCircle,
     CheckCircle2,
+    ChevronRight,
+    Clock,
     Download,
     ExternalLink,
     TrendingUp,
 } from 'lucide-react';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
     Card,
     CardContent,
@@ -14,10 +18,17 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { dashboard } from '@/routes';
 import type {
     DashboardAnalytics,
+    DashboardCoverageCount,
     DashboardDistribution,
+    DashboardVersion,
     DistributionGrowthRange,
     TotalGrowthRange,
 } from '@/types';
@@ -80,6 +91,14 @@ function formatLabel(value: string): string {
         .join(' ');
 }
 
+function formatList(values: string[], limit = 3): string {
+    if (values.length <= limit) {
+        return values.join(', ');
+    }
+
+    return `${values.slice(0, limit).join(', ')} +${values.length - limit}`;
+}
+
 function StatusBadge({ status }: { status: DashboardDistribution['status'] }) {
     if (status === 'current') {
         return (
@@ -90,11 +109,73 @@ function StatusBadge({ status }: { status: DashboardDistribution['status'] }) {
         );
     }
 
+    if (status === 'stale') {
+        return (
+            <Badge
+                variant="outline"
+                className="text-muted-foreground gap-1.5"
+                title="Not captured in the latest collection"
+            >
+                <Clock className="size-3.5" />
+                Stale
+            </Badge>
+        );
+    }
+
     return (
-        <Badge variant="outline" className="text-muted-foreground gap-1.5">
+        <Badge
+            variant="outline"
+            className="text-muted-foreground gap-1.5"
+            title="Never captured"
+        >
             <AlertCircle className="size-3.5" />
             Missing
         </Badge>
+    );
+}
+
+function VersionStatusBadge({
+    status,
+}: {
+    status: DashboardVersion['status'];
+}) {
+    if (status === 'current') {
+        return null;
+    }
+
+    return (
+        <Badge
+            variant="outline"
+            className="text-muted-foreground gap-1.5"
+            title="Not captured in the latest collection"
+        >
+            <AlertCircle className="size-3.5" />
+            Missing
+        </Badge>
+    );
+}
+
+interface CoverageCardProps {
+    label: string;
+    count: DashboardCoverageCount;
+}
+
+function CoverageCard({ label, count }: CoverageCardProps) {
+    return (
+        <Card className="gap-3">
+            <CardHeader className="pb-0">
+                <CardDescription>{label}</CardDescription>
+                <CardTitle className="text-3xl">
+                    {count.captured}
+                    <span className="text-muted-foreground">
+                        /{count.available}
+                    </span>
+                </CardTitle>
+                <p className="text-muted-foreground text-xs">
+                    Captured in the latest collection
+                </p>
+            </CardHeader>
+        </Card>
     );
 }
 
@@ -177,32 +258,24 @@ function DistributionGrowth({ growth }: { growth: DistributionGrowthRange[] }) {
     );
 }
 
-interface DistributionRowProps {
-    distribution: DashboardDistribution;
+const rowGridClassName =
+    'grid gap-4 px-4 py-4 sm:px-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(6rem,0.7fr)_minmax(12rem,1.2fr)_minmax(9rem,1fr)_2.25rem] lg:items-center';
+
+interface MetricColumnsProps {
+    downloads: number | null;
+    growth: DistributionGrowthRange[];
+    capturedAt: string | null;
 }
 
-function DistributionRow({ distribution }: DistributionRowProps) {
+function MetricColumns({ downloads, growth, capturedAt }: MetricColumnsProps) {
     return (
-        <div className="grid gap-4 border-t px-4 py-4 first:border-t-0 sm:px-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(6rem,0.7fr)_minmax(12rem,1.2fr)_minmax(9rem,1fr)_auto] lg:items-center">
-            <div className="min-w-0">
-                <div className="flex flex-wrap items-center gap-2">
-                    <h3 className="truncate text-sm font-medium">
-                        {distribution.name}
-                    </h3>
-                    <StatusBadge status={distribution.status} />
-                </div>
-                <p className="text-muted-foreground mt-1 text-xs">
-                    {formatLabel(distribution.provider)} /{' '}
-                    {formatLabel(distribution.loader)}
-                </p>
-            </div>
-
+        <>
             <div>
                 <p className="text-muted-foreground text-xs font-medium">
                     Downloads
                 </p>
                 <p className="mt-1 text-sm font-semibold">
-                    {formatNumber(distribution.downloads)}
+                    {formatNumber(downloads)}
                 </p>
             </div>
 
@@ -210,36 +283,153 @@ function DistributionRow({ distribution }: DistributionRowProps) {
                 <p className="text-muted-foreground text-xs font-medium">
                     Growth
                 </p>
-                <DistributionGrowth growth={distribution.growth} />
+                <DistributionGrowth growth={growth} />
             </div>
 
             <div>
                 <p className="text-muted-foreground text-xs font-medium">
                     Captured
                 </p>
-                <p className="mt-1 text-sm">
-                    {formatDate(distribution.capturedAt)}
-                </p>
+                <p className="mt-1 text-sm">{formatDate(capturedAt)}</p>
+            </div>
+        </>
+    );
+}
+
+function versionDetails(version: DashboardVersion): string {
+    const details = [];
+
+    if (
+        version.versionNumber !== null &&
+        version.versionNumber !== version.displayName
+    ) {
+        details.push(version.versionNumber);
+    }
+
+    if (version.loaders.length > 0) {
+        details.push(version.loaders.map(formatLabel).join(', '));
+    }
+
+    if (version.gameVersions.length > 0) {
+        details.push(`MC ${formatList(version.gameVersions)}`);
+    }
+
+    return details.join(' · ');
+}
+
+function VersionRow({ version }: { version: DashboardVersion }) {
+    const details = versionDetails(version);
+
+    return (
+        <li className={`${rowGridClassName} border-t first:border-t-0`}>
+            <div className="min-w-0 pl-9">
+                <div className="flex flex-wrap items-center gap-2">
+                    <h4 className="truncate text-sm font-medium">
+                        {version.displayName}
+                    </h4>
+                    <VersionStatusBadge status={version.status} />
+                </div>
+                {details !== '' && (
+                    <p
+                        className="text-muted-foreground mt-1 text-xs"
+                        title={version.gameVersions.join(', ')}
+                    >
+                        {details}
+                    </p>
+                )}
             </div>
 
-            <a
-                href={distribution.listingUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-muted-foreground hover:bg-accent hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md border transition-colors"
-                aria-label={`Open ${distribution.name} listing`}
-            >
-                <ExternalLink className="size-4" />
-            </a>
-        </div>
+            <MetricColumns
+                downloads={version.downloads}
+                growth={version.growth}
+                capturedAt={version.capturedAt}
+            />
+
+            <div aria-hidden="true" className="hidden lg:block" />
+        </li>
+    );
+}
+
+interface DistributionRowProps {
+    distribution: DashboardDistribution;
+}
+
+function DistributionRow({ distribution }: DistributionRowProps) {
+    const [open, setOpen] = useState(false);
+    const versionCount = distribution.versions.length;
+
+    return (
+        <Collapsible
+            open={open}
+            onOpenChange={setOpen}
+            className="border-t first:border-t-0"
+        >
+            <div className={rowGridClassName}>
+                <div className="flex min-w-0 items-start gap-2">
+                    <CollapsibleTrigger asChild>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="-my-0.5 size-7 shrink-0"
+                            aria-label={`Versions/files for ${distribution.name}`}
+                        >
+                            <ChevronRight
+                                className={`size-4 transition-transform ${open ? 'rotate-90' : ''}`}
+                            />
+                        </Button>
+                    </CollapsibleTrigger>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="truncate text-sm font-medium">
+                                {distribution.name}
+                            </h3>
+                            <StatusBadge status={distribution.status} />
+                        </div>
+                        <p className="text-muted-foreground mt-1 text-xs">
+                            {formatLabel(distribution.provider)} /{' '}
+                            {formatLabel(distribution.loader)} ·{' '}
+                            {versionCount === 1
+                                ? '1 version/file'
+                                : `${versionCount} versions/files`}
+                        </p>
+                    </div>
+                </div>
+
+                <MetricColumns
+                    downloads={distribution.downloads}
+                    growth={distribution.growth}
+                    capturedAt={distribution.capturedAt}
+                />
+
+                <a
+                    href={distribution.listingUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-muted-foreground hover:bg-accent hover:text-accent-foreground inline-flex size-9 items-center justify-center rounded-md border transition-colors"
+                    aria-label={`Open ${distribution.name} listing`}
+                >
+                    <ExternalLink className="size-4" />
+                </a>
+            </div>
+
+            <CollapsibleContent className="bg-muted/30 border-t">
+                {versionCount === 0 ? (
+                    <p className="text-muted-foreground px-4 py-4 pl-13 text-sm sm:px-6 sm:pl-15">
+                        No versions/files collected yet.
+                    </p>
+                ) : (
+                    <ul aria-label={`${distribution.name} versions/files`}>
+                        {distribution.versions.map((version) => (
+                            <VersionRow key={version.id} version={version} />
+                        ))}
+                    </ul>
+                )}
+            </CollapsibleContent>
+        </Collapsible>
     );
 }
 
 export default function Dashboard({ analytics }: DashboardProps) {
-    const currentDistributionCount = analytics.distributions.filter(
-        (distribution) => distribution.status === 'current',
-    ).length;
-
     return (
         <>
             <Head title="Analytics Dashboard" />
@@ -291,30 +481,15 @@ export default function Dashboard({ analytics }: DashboardProps) {
                         </CardHeader>
                     </Card>
 
-                    <Card className="gap-3">
-                        <CardHeader className="pb-0">
-                            <CardDescription>
-                                Active distributions
-                            </CardDescription>
-                            <CardTitle className="text-3xl">
-                                {analytics.distributions.length}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
+                    <CoverageCard
+                        label="Distribution coverage"
+                        count={analytics.coverage.distributions}
+                    />
 
-                    <Card className="gap-3">
-                        <CardHeader className="pb-0">
-                            <CardDescription>
-                                Collection coverage
-                            </CardDescription>
-                            <CardTitle className="text-3xl">
-                                {currentDistributionCount}
-                                <span className="text-muted-foreground">
-                                    /{analytics.distributions.length}
-                                </span>
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
+                    <CoverageCard
+                        label="Version/file coverage"
+                        count={analytics.coverage.versions}
+                    />
                 </div>
 
                 {analytics.hasSnapshots && (
@@ -329,8 +504,13 @@ export default function Dashboard({ analytics }: DashboardProps) {
                         <CardTitle>Distribution snapshots</CardTitle>
                         <CardDescription>
                             Downloads, recent growth, and capture times for each
-                            active listing.
+                            active listing. Expand a listing to see its
+                            versions/files.
                         </CardDescription>
+                        <p className="text-muted-foreground text-xs">
+                            Version/file downloads may not add up to the
+                            distribution total.
+                        </p>
                     </CardHeader>
                     <CardContent className="px-0">
                         {analytics.distributions.map((distribution) => (
