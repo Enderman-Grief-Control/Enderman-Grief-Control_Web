@@ -13,6 +13,7 @@ import {
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import DistributionVersionExclusionController from '@/actions/App/Http/Controllers/DistributionVersionExclusionController';
+import { AggregateDownloadHistory } from '@/components/analytics/aggregate-download-history';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -635,7 +636,7 @@ function DistributionRow({ distribution }: DistributionRowProps) {
     );
 }
 
-export default function Dashboard({ analytics }: DashboardProps) {
+export default function Dashboard({ analytics, historyRange }: DashboardProps) {
     return (
         <>
             <Head title="Analytics Dashboard" />
@@ -704,6 +705,11 @@ export default function Dashboard({ analytics }: DashboardProps) {
                         distributionCount={analytics.distributions.length}
                     />
                 )}
+
+                <AggregateDownloadHistory
+                    analytics={analytics}
+                    historyRange={historyRange}
+                />
 
                 <Card className="gap-0 overflow-hidden py-0">
                     <CardHeader className="py-5">
