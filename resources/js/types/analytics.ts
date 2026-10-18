@@ -101,3 +101,83 @@ export interface DashboardAnalytics {
     coverage: DashboardCoverage;
     distributions: DashboardDistribution[];
 }
+
+export type HistoryRangeKey = '7d' | '30d' | '90d' | 'all';
+
+export type HistorySeriesKey = `distribution:${number}` | `version:${number}`;
+
+export type HistoryStatus =
+    | 'ready'
+    | 'single_point'
+    | 'outside_range'
+    | 'never_collected';
+
+export interface HistorySampling {
+    mode: 'exact' | 'min_max';
+    bucketSeconds: number | null;
+    originalObservationCount: number;
+    returnedObservationCount: number;
+    returnedPointCount: number;
+}
+
+export interface HistoryPoint {
+    at: string;
+    downloads: number | null;
+    sourceCapturedAt: string | null;
+    kind: 'observed' | 'carried' | 'gap';
+    gapReason: 'not_yet_observed' | 'expired' | null;
+}
+
+export interface HistorySeries {
+    key: HistorySeriesKey;
+    id: number;
+    distributionId: number;
+    label: string;
+    historyStatus: HistoryStatus;
+    observationCount: number;
+    points: HistoryPoint[];
+    sampling: HistorySampling;
+}
+
+export interface HistoryContributor {
+    distributionId: number;
+    downloads: number | null;
+    sourceCapturedAt: string | null;
+    status: 'observed' | 'carried' | 'stale' | 'unknown';
+}
+
+export interface HistoryTotalPoint {
+    at: string;
+    downloads: number | null;
+    knownDownloads: number | null;
+    status: 'complete' | 'partial' | 'unavailable';
+    contributors: HistoryContributor[];
+}
+
+export interface HistoryTotal {
+    key: 'total';
+    points: HistoryTotalPoint[];
+    sampling: HistorySampling;
+}
+
+export interface HistoryMeta {
+    range: HistoryRangeKey;
+    anchorAt: string | null;
+    domain: { startedAt: string | null; endedAt: string | null };
+    stalenessSeconds: 43200;
+    budget: { pointTarget: 20000; byteTarget: 3145728; exceeded: boolean };
+}
+
+export interface AggregateHistory extends HistoryMeta {
+    scope: 'aggregate';
+    series: HistorySeries[];
+    total: HistoryTotal;
+}
+
+export interface DistributionHistory extends HistoryMeta {
+    scope: 'versions';
+    distributionId: number;
+    series: HistorySeries[];
+}
+
+export type HistoryResponse = AggregateHistory | DistributionHistory;

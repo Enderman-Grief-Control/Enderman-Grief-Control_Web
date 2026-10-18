@@ -45,11 +45,13 @@ import type {
     DashboardRemovedVersion,
     DashboardVersion,
     DistributionGrowthRange,
+    HistoryRangeKey,
     TotalGrowthRange,
 } from '@/types';
 
 interface DashboardProps {
     analytics: DashboardAnalytics;
+    historyRange: HistoryRangeKey;
 }
 
 const numberFormatter = new Intl.NumberFormat();
