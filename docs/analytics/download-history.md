@@ -13,10 +13,10 @@ total; By distribution shows the active distribution series instead. The existin
 summary cards, growth figures, version/file rows, and remove/restore actions
 remain available.
 
-| Chart | Available ranges | Initial range | Persistence |
-| --- | --- | --- | --- |
-| Aggregate | 7D, 30D, 90D, All | 30D | `historyRange` in the dashboard URL restores the range on reload or bookmark |
-| Version/file, inside each expanded distribution | 7D, 30D | 7D | Each panel keeps its own choice across collapse/reopen and page-state-preserving refreshes; a full reload resets it |
+| Chart                                           | Available ranges  | Initial range | Persistence                                                                                                         |
+| ----------------------------------------------- | ----------------- | ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| Aggregate                                       | 7D, 30D, 90D, All | 30D           | `historyRange` in the dashboard URL restores the range on reload or bookmark                                        |
+| Version/file, inside each expanded distribution | 7D, 30D           | 7D            | Each panel keeps its own choice across collapse/reopen and page-state-preserving refreshes; a full reload resets it |
 
 Every available version/file starts selected, including Missing rows with older
 history and identities that have never been collected. Individually labeled
@@ -99,11 +99,11 @@ version/file response; React formats points and manages visibility.
 `GET /dashboard/history`, named `dashboard.history`, uses the dashboard's
 existing `auth` and `verified` middleware. Its query parameters are:
 
-| Parameter | Contract |
-| --- | --- |
-| `range` | `7d`, `30d`, `90d`, or `all`; omission defaults to `30d` |
-| `distribution` | Optional positive active-distribution ID; omission requests aggregate history |
-| `anchor` | Optional UTC ISO timestamp ending in `Z`, with up to six fractional digits; must match a stored active aggregate capture; omission resolves the current anchor |
+| Parameter      | Contract                                                                                                                                                       |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `range`        | `7d`, `30d`, `90d`, or `all`; omission defaults to `30d`                                                                                                       |
+| `distribution` | Optional positive active-distribution ID; omission requests aggregate history                                                                                  |
+| `anchor`       | Optional UTC ISO timestamp ending in `Z`, with up to six fractional digits; must match a stored active aggregate capture; omission resolves the current anchor |
 
 Malformed input returns JSON 422; a well-formed missing/inactive distribution ID
 returns 404. The endpoint accepts no arbitrary file-ID scope and includes only
