@@ -14,6 +14,7 @@ import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import DistributionVersionExclusionController from '@/actions/App/Http/Controllers/DistributionVersionExclusionController';
 import { AggregateDownloadHistory } from '@/components/analytics/aggregate-download-history';
+import { VersionDownloadHistory } from '@/components/analytics/version-download-history';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,6 +39,12 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+    DownloadHistoryProvider,
+    useDownloadHistory,
+} from '@/hooks/use-download-history';
+import { useHistoryRange } from '@/hooks/use-history-range';
+import { useVersionSelection } from '@/hooks/use-version-selection';
 import { dashboard } from '@/routes';
 import type {
     DashboardAnalytics,
@@ -370,7 +377,13 @@ function VersionName({
     );
 }
 
-function RemoveVersionDialog({ version }: { version: DashboardVersion }) {
+function RemoveVersionDialog({
+    version,
+    onHistoryChange,
+}: {
+    version: DashboardVersion;
+    onHistoryChange: () => void;
+}) {
     const [open, setOpen] = useState(false);
 
     return (
@@ -401,7 +414,10 @@ function RemoveVersionDialog({ version }: { version: DashboardVersion }) {
                         version.id,
                     )}
                     options={exclusionFormOptions}
-                    onSuccess={() => setOpen(false)}
+                    onSuccess={() => {
+                        onHistoryChange();
+                        setOpen(false);
+                    }}
                     className="space-y-4"
                 >
                     {({ processing, errors }) => (
@@ -425,7 +441,13 @@ function RemoveVersionDialog({ version }: { version: DashboardVersion }) {
     );
 }
 
-function VersionRow({ version }: { version: DashboardVersion }) {
+function VersionRow({
+    version,
+    onHistoryChange,
+}: {
+    version: DashboardVersion;
+    onHistoryChange: () => void;
+}) {
     return (
         <li className={`${rowGridClassName} border-t first:border-t-0`}>
             <VersionName
@@ -440,7 +462,10 @@ function VersionRow({ version }: { version: DashboardVersion }) {
             />
 
             {version.status === 'missing' ? (
-                <RemoveVersionDialog version={version} />
+                <RemoveVersionDialog
+                    version={version}
+                    onHistoryChange={onHistoryChange}
+                />
             ) : (
                 <div aria-hidden="true" className="hidden lg:block" />
             )}
@@ -448,7 +473,13 @@ function VersionRow({ version }: { version: DashboardVersion }) {
     );
 }
 
-function RemovedVersionRow({ version }: { version: DashboardRemovedVersion }) {
+function RemovedVersionRow({
+    version,
+    onHistoryChange,
+}: {
+    version: DashboardRemovedVersion;
+    onHistoryChange: () => void;
+}) {
     return (
         <li className={`${rowGridClassName} border-t`}>
             <VersionName
@@ -492,6 +523,7 @@ function RemovedVersionRow({ version }: { version: DashboardRemovedVersion }) {
                     version.id,
                 )}
                 options={exclusionFormOptions}
+                onSuccess={onHistoryChange}
             >
                 {({ processing }) => (
                     <Button
@@ -513,8 +545,10 @@ function RemovedVersionRow({ version }: { version: DashboardRemovedVersion }) {
 
 function RemovedVersions({
     distribution,
+    onHistoryChange,
 }: {
     distribution: DashboardDistribution;
+    onHistoryChange: () => void;
 }) {
     const [showRemoved, setShowRemoved] = useState(false);
     const listId = useId();
@@ -547,7 +581,11 @@ function RemovedVersions({
                     aria-label={`${distribution.name} removed versions/files`}
                 >
                     {distribution.removedVersions.map((version) => (
-                        <RemovedVersionRow key={version.id} version={version} />
+                        <RemovedVersionRow
+                            key={version.id}
+                            version={version}
+                            onHistoryChange={onHistoryChange}
+                        />
                     ))}
                 </ul>
             )}
@@ -557,10 +595,29 @@ function RemovedVersions({
 
 interface DistributionRowProps {
     distribution: DashboardDistribution;
+    anchor: string | null;
 }
 
-function DistributionRow({ distribution }: DistributionRowProps) {
+function DistributionRow({ distribution, anchor }: DistributionRowProps) {
     const [open, setOpen] = useState(false);
+    const [range, setRange] = useState<'7d' | '30d'>('7d');
+    const [historyRevision, setHistoryRevision] = useState(0);
+    const selection = useVersionSelection(distribution.versions);
+    const identitySet = JSON.stringify([
+        historyRevision,
+        distribution.versions
+            .map((version) => version.id)
+            .sort((a, b) => a - b),
+    ]);
+    const history = useDownloadHistory(
+        range,
+        anchor,
+        identitySet,
+        distribution.id,
+        open,
+    );
+    const onHistoryChange = () =>
+        setHistoryRevision((revision) => revision + 1);
     const versionCount = distribution.versions.length;
 
     return (
@@ -618,6 +675,14 @@ function DistributionRow({ distribution }: DistributionRowProps) {
             </div>
 
             <CollapsibleContent className="bg-muted/30 border-t">
+                <VersionDownloadHistory
+                    distribution={distribution}
+                    range={range}
+                    changeRange={setRange}
+                    anchor={anchor}
+                    history={history}
+                    selection={selection}
+                />
                 {versionCount === 0 ? (
                     <p className="text-muted-foreground px-4 py-4 pl-13 text-sm sm:px-6 sm:pl-15">
                         No versions/files collected yet.
@@ -625,20 +690,28 @@ function DistributionRow({ distribution }: DistributionRowProps) {
                 ) : (
                     <ul aria-label={`${distribution.name} versions/files`}>
                         {distribution.versions.map((version) => (
-                            <VersionRow key={version.id} version={version} />
+                            <VersionRow
+                                key={version.id}
+                                version={version}
+                                onHistoryChange={onHistoryChange}
+                            />
                         ))}
                     </ul>
                 )}
 
-                <RemovedVersions distribution={distribution} />
+                <RemovedVersions
+                    distribution={distribution}
+                    onHistoryChange={onHistoryChange}
+                />
             </CollapsibleContent>
         </Collapsible>
     );
 }
 
 export default function Dashboard({ analytics, historyRange }: DashboardProps) {
+    const { range, rangeError, changeRange } = useHistoryRange(historyRange);
     return (
-        <>
+        <DownloadHistoryProvider>
             <Head title="Analytics Dashboard" />
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto p-4">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -708,7 +781,9 @@ export default function Dashboard({ analytics, historyRange }: DashboardProps) {
 
                 <AggregateDownloadHistory
                     analytics={analytics}
-                    historyRange={historyRange}
+                    range={range}
+                    rangeError={rangeError}
+                    changeRange={changeRange}
                 />
 
                 <Card className="gap-0 overflow-hidden py-0">
@@ -729,12 +804,13 @@ export default function Dashboard({ analytics, historyRange }: DashboardProps) {
                             <DistributionRow
                                 key={distribution.id}
                                 distribution={distribution}
+                                anchor={analytics.latestCollection.capturedAt}
                             />
                         ))}
                     </CardContent>
                 </Card>
             </div>
-        </>
+        </DownloadHistoryProvider>
     );
 }
 

@@ -1,5 +1,4 @@
-import { router } from '@inertiajs/react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import {
     DownloadHistoryChart,
     historyDate,
@@ -13,8 +12,7 @@ import {
     CardHeader,
     CardTitle,
 } from '@/components/ui/card';
-import { useAggregateHistory } from '@/hooks/use-aggregate-history';
-import { dashboard } from '@/routes';
+import { useDownloadHistory } from '@/hooks/use-download-history';
 import type { DashboardAnalytics, HistoryRangeKey } from '@/types';
 
 const ranges: { key: HistoryRangeKey; label: string }[] = [
@@ -26,19 +24,16 @@ const ranges: { key: HistoryRangeKey; label: string }[] = [
 
 export function AggregateDownloadHistory({
     analytics,
-    historyRange,
+    range,
+    rangeError,
+    changeRange,
 }: {
     analytics: DashboardAnalytics;
-    historyRange: HistoryRangeKey;
+    range: HistoryRangeKey;
+    rangeError: boolean;
+    changeRange: (range: HistoryRangeKey) => void;
 }) {
     const [view, setView] = useState<'total' | 'distributions'>('total');
-    const [pendingRange, setPendingRange] = useState<HistoryRangeKey | null>(
-        null,
-    );
-    const [rangeError, setRangeError] = useState(false);
-    const visitGeneration = useRef(0);
-    const cancelVisit = useRef<(() => void) | null>(null);
-    const range = pendingRange ?? historyRange;
     const anchor = analytics.latestCollection.capturedAt;
     const identitySet = JSON.stringify(
         analytics.distributions.map((distribution) => [
@@ -48,58 +43,11 @@ export function AggregateDownloadHistory({
                 .sort((a, b) => a - b),
         ]),
     );
-    const { state, retry } = useAggregateHistory(range, anchor, identitySet);
-
-    useEffect(
-        () => () => {
-            ++visitGeneration.current;
-            cancelVisit.current?.();
-        },
-        [],
-    );
-
-    function changeRange(nextRange: HistoryRangeKey) {
-        if (nextRange === range && pendingRange === null) return;
-        const generation = ++visitGeneration.current;
-        cancelVisit.current?.();
-        setPendingRange(nextRange);
-        setRangeError(false);
-        router.get(
-            dashboard.url({ query: { historyRange: nextRange } }),
-            {},
-            {
-                only: ['historyRange'],
-                replace: true,
-                preserveState: true,
-                preserveScroll: true,
-                onCancelToken: (token) => {
-                    cancelVisit.current = () => token.cancel();
-                },
-                onError: () => {
-                    if (visitGeneration.current === generation)
-                        setRangeError(true);
-                },
-                onHttpException: () => {
-                    if (visitGeneration.current === generation)
-                        setRangeError(true);
-                    return false;
-                },
-                onNetworkError: () => {
-                    if (visitGeneration.current === generation)
-                        setRangeError(true);
-                    return false;
-                },
-                onFinish: () => {
-                    if (visitGeneration.current === generation) {
-                        setPendingRange(null);
-                        cancelVisit.current = null;
-                    }
-                },
-            },
-        );
-    }
-
-    const data = state.status === 'ready' ? state.data : null;
+    const { state, retry } = useDownloadHistory(range, anchor, identitySet);
+    const data =
+        state.status === 'ready' && state.data.scope === 'aggregate'
+            ? state.data
+            : null;
     const labels = Object.fromEntries(
         analytics.distributions.map((distribution) => [
             distribution.id,
