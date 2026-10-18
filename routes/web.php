@@ -1,20 +1,15 @@
 <?php
 
-use App\Analytics\ReadDashboardAnalytics;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DistributionVersionExclusionController;
+use App\Http\Controllers\DownloadHistoryController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::redirect('/', '/dashboard')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get(
-        'dashboard',
-        fn (ReadDashboardAnalytics $analytics) => Inertia::render(
-            'dashboard',
-            ['analytics' => $analytics()]
-        )
-    )->name('dashboard');
+    Route::get('dashboard', DashboardController::class)->name('dashboard');
+    Route::get('dashboard/history', DownloadHistoryController::class)->name('dashboard.history');
 
     Route::post('dashboard/versions/{distributionVersion}/exclusion', [DistributionVersionExclusionController::class, 'store'])
         ->name('dashboard.versions.exclusion.store');

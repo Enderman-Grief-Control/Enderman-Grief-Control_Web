@@ -21,6 +21,9 @@ class DashboardTest extends TestCase
     {
         parent::setUp();
 
+        // Keep route/data assertions independent of a running Vite SSR server.
+        config(['inertia.ssr.enabled' => false]);
+
         // Dashboard rendering must read stored snapshots only, never provider APIs.
         Http::preventStrayRequests();
     }
