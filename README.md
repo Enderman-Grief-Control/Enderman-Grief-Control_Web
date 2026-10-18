@@ -121,9 +121,15 @@ Each successful distribution collection writes an aggregate row to
 `distribution_version_snapshots`.
 
 Aggregate snapshots remain the canonical source for dashboard distribution
-totals. Detailed snapshots are retained for later growth, loader, version, and
-file-level analytics; summed detailed downloads may differ from provider
-aggregate totals.
+totals. Detailed snapshots supply per-version/file downloads, growth, and
+recorded history; summed detailed downloads may differ from provider aggregate
+totals.
+
+The dashboard includes aggregate 7D/30D/90D/All history (30D by default) and
+independent 7D/30D version/file charts inside expanded distributions (7D by
+default). See [Download history](docs/analytics/download-history.md) for chart
+controls, freshness and partial-total semantics, loading/reduction behavior,
+and verification limits.
 
 The Laravel scheduler registers `metrics:collect` every 6 hours for hosts that
 run `php artisan schedule:run`. Current production collection is instead driven
